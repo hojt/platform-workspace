@@ -1,0 +1,26 @@
+{
+  "name": "platform-workspace-agent",
+  "build": {
+    "dockerfile": "../Containerfile",
+    "context": "../..",
+    "target": "agent"
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "containerEnv": {
+    "OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER": "1"
+  },
+  "mounts": [
+    "source=${localWorkspaceFolder}/../homelab,target=/workspace/repos/homelab,type=bind",
+    "source=${localWorkspaceFolder}/../local-platform,target=/workspace/repos/local-platform,type=bind",
+    "source=${localWorkspaceFolder}/../local-environments,target=/workspace/repos/local-environments,type=bind",
+
+    "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/developer/.local/share/opencode/auth.json,type=bind"
+  ],
+  "runArgs": [
+    "--security-opt=label=disable"
+  ],
+  "remoteUser": "developer",
+  "containerUser": "developer",
+  "updateRemoteUserUID": true
+}

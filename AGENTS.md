@@ -7,6 +7,27 @@ responsibilities. Visibility across repositories is provided so that platform
 changes can be understood as a whole, not so that repository boundaries can be
 ignored.
 
+## Workspace layout
+
+The coding-agent environment presents:
+
+```text
+/workspace/
+├── README.md
+├── AGENTS.md
+├── dev.sh
+├── agent.sh
+└── repos/
+    ├── homelab/
+    ├── local-platform/
+    └── local-environments/
+```
+
+`/workspace` is the `platform-workspace` repository.
+
+The repositories under `/workspace/repos/` are independent Git repositories
+bind-mounted into the workspace.
+
 ## Repository responsibilities
 
 ### `homelab`
@@ -78,19 +99,24 @@ cross-repository coupling for speculative future requirements.
 When a change spans repositories, validate each affected repository separately
 as well as any relevant cross-repository assumptions.
 
+Static validation that does not require privileged host or cluster access is
+appropriate. For example, rendering Kubernetes manifests locally is compatible
+with the intended agent environment.
+
 ## Development environments
 
-The workspace provides separate environments for the human developer and the
-coding agent.
+The human developer and coding agent use separate environments.
 
 The developer environment may include capabilities required to operate and
 inspect the local platform.
 
-The coding-agent environment should receive only the capabilities required to
-inspect, edit, and validate repository content.
+The coding-agent environment intentionally receives a narrower capability set.
+It has read/write access to the workspace repositories but must not assume it has
+the privileges available to the developer environment.
 
-Do not assume that capabilities available to the developer environment are
-available or appropriate for the coding-agent environment.
+The presence of tools such as `kubectl`, `kind`, or `podman` does not imply that
+the agent should have access to the host container runtime or Kubernetes
+cluster.
 
 ### Agent containment
 
@@ -99,13 +125,25 @@ agent and limit its blast radius.
 
 Do not attempt to bypass, weaken, or escape this containment.
 
+The expected agent environment does not expose:
+
+- the host Podman socket
+- the host Kubernetes configuration
+- the host Git configuration
+- container-runtime connection environment variables
+
+`agent.sh` verifies these containment expectations before starting OpenCode or
+an agent shell.
+
+Do not modify the workspace configuration to bypass these checks.
+
 If you notice configuration or architectural issues that could unintentionally
 grant the agent broader access or capabilities than intended, point them out
 clearly so they can be reviewed by the human developer.
 
-Do not add privileged host, container-runtime, Kubernetes-cluster, or similar
-access to the agent environment unless the human developer explicitly requests
-it for a concrete reason.
+Do not add privileged host, container-runtime, Kubernetes-cluster, host-network,
+or similar access to the agent environment unless the human developer
+explicitly requests it for a concrete reason.
 
 ## Cluster state and GitOps
 
@@ -114,12 +152,12 @@ Git is the source of truth for desired environment state.
 Do not make direct cluster changes as a substitute for changing
 `local-environments`.
 
-If cluster access is available for validation, use it only to inspect or verify
-the effect of repository-defined state unless the human developer explicitly
-requests an operational action.
+The coding-agent environment is not intended to have credentials or runtime
+access for operating the live local cluster.
 
-Do not silently reconcile configuration by modifying live resources outside
-Git.
+If cluster access is ever explicitly provided for a concrete task, use it only
+within the scope requested by the human developer and do not silently reconcile
+configuration by modifying live resources outside Git.
 
 ## Git
 

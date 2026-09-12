@@ -1,0 +1,98 @@
+FROM registry.fedoraproject.org/fedora:43 AS base
+
+ARG TASK_VERSION=3.45.4
+ARG KIND_VERSION=0.32.0
+ARG KUBECTL_VERSION=1.35.0
+
+ARG USERNAME=developer
+ARG USER_UID=1000
+ARG USER_GID=${USER_UID}
+
+RUN groupadd --gid "${USER_GID}" "${USERNAME}" \
+    && useradd \
+        --uid "${USER_UID}" \
+        --gid "${USER_GID}" \
+        --create-home \
+        --shell /bin/bash \
+        "${USERNAME}"
+
+RUN mkdir -p \
+      "/home/${USERNAME}/.config/nvim" \
+      "/home/${USERNAME}/.kube" \
+      "/home/${USERNAME}/.local/share/nvim" \
+      "/home/${USERNAME}/.local/state/nvim" \
+      "/home/${USERNAME}/.cache/nvim" \
+    && chown -R "${USERNAME}:${USERNAME}" \
+      "/home/${USERNAME}/.config" \
+      "/home/${USERNAME}/.kube" \
+      "/home/${USERNAME}/.local" \
+      "/home/${USERNAME}/.cache"
+
+RUN dnf install -y \
+        bash \
+        ca-certificates \
+        curl \
+        fd-find \
+        findutils \
+        fzf \
+        git \
+        neovim \
+        podman \
+        procps-ng \
+        ripgrep \
+        tar \
+        unzip \
+    && dnf clean all
+
+# Task
+RUN curl --fail --location --silent --show-error \
+        "https://github.com/go-task/task/releases/download/v${TASK_VERSION}/task_linux_amd64.tar.gz" \
+        --output /tmp/task.tar.gz \
+    && tar --extract \
+        --gzip \
+        --file /tmp/task.tar.gz \
+        --directory /usr/local/bin \
+        task \
+    && rm /tmp/task.tar.gz \
+    && task --version
+
+# kind
+RUN curl --fail --location --silent --show-error \
+        "https://kind.sigs.k8s.io/dl/v${KIND_VERSION}/kind-linux-amd64" \
+        --output /usr/local/bin/kind \
+    && chmod +x /usr/local/bin/kind \
+    && kind version
+
+# kubectl
+RUN curl --fail --location --silent --show-error \
+        "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+        --output /usr/local/bin/kubectl \
+    && chmod +x /usr/local/bin/kubectl \
+    && kubectl version --client
+
+WORKDIR /workspace
+
+USER ${USERNAME}
+
+
+FROM base AS agent
+
+USER root
+
+ARG OPENCODE_VERSION=1.18.23
+
+RUN mkdir -p /home/developer/.local/share/opencode \
+    && chown -R developer:developer /home/developer/.local/share/opencode
+
+RUN curl --fail --location --silent --show-error \
+    "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz" \
+    --output /tmp/opencode.tar.gz \
+    && tar --extract --gzip --file /tmp/opencode.tar.gz --directory /tmp \
+    && install --mode=0755 /tmp/opencode /usr/local/bin/opencode \
+    && rm /tmp/opencode.tar.gz /tmp/opencode \
+    && opencode --version
+
+USER developer
+
+
+FROM base AS development

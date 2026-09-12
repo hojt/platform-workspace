@@ -80,37 +80,125 @@ A single platform change may legitimately require coordinated changes in more
 than one repository. Each repository should still contain only the part of the
 change that belongs to its responsibility.
 
-## Workspace layout
+## Host layout
 
-The intended development environment presents the workspace approximately as:
+The workspace expects the repositories to exist as siblings on the host:
 
 ```text
-/workspace/
+~/src/lab/
 ├── platform-workspace/
 ├── homelab/
 ├── local-platform/
-└── local-environments/
+├── local-environments/
+└── example-app/
 ```
 
-The exact physical layout on the host may differ. The component repositories
-remain separate Git repositories.
+Only the three platform repositories are mounted into this workspace.
+`example-app` remains outside it.
 
-## Development environment
+The `repos/` directory in this repository is only the mount point used inside
+the development environments. Its mounted contents are intentionally ignored by
+the `platform-workspace` Git repository.
 
-This repository will provide shared development tooling for working across the
-platform repositories, including:
+## Container workspace layout
 
-- a developer devcontainer
-- a coding-agent devcontainer
-- repository-level Task commands where useful
-- workspace instructions and documentation
+Both the developer and coding-agent environments present the same repository
+layout:
 
-The developer and coding-agent environments may intentionally have different
-capabilities.
+```text
+/workspace/
+├── README.md
+├── AGENTS.md
+├── dev.sh
+├── agent.sh
+└── repos/
+    ├── homelab/
+    ├── local-platform/
+    └── local-environments/
+```
 
-The coding-agent environment should be contained and should not automatically
-receive access to privileged host or cluster capabilities merely because the
-developer environment requires them.
+`/workspace` is the `platform-workspace` repository itself. The three
+repositories under `/workspace/repos/` are bind mounts of the sibling
+repositories on the host.
+
+Each mounted repository retains its own independent Git state and history.
+
+## Development environments
+
+This repository provides two separate devcontainer environments.
+
+### Developer environment
+
+Start or enter the primary developer environment with:
+
+```bash
+./dev.sh
+```
+
+Rebuild it with:
+
+```bash
+./dev.sh rebuild
+```
+
+Open an additional shell in an already running developer container with:
+
+```bash
+./dev.sh shell
+```
+
+The developer environment is intentionally capable of operating the local
+platform. It has access to capabilities such as:
+
+- the host Podman socket
+- the host Kubernetes configuration
+- host networking
+- the developer Git configuration
+- the developer Neovim configuration
+
+This environment is for the human developer.
+
+### Coding-agent environment
+
+Start OpenCode in the contained coding-agent environment with:
+
+```bash
+./agent.sh
+```
+
+Rebuild it with:
+
+```bash
+./agent.sh rebuild
+```
+
+Open a diagnostic shell in the coding-agent environment with:
+
+```bash
+./agent.sh shell
+```
+
+The coding-agent environment has read/write access to the workspace repositories
+but intentionally does not receive the privileged host capabilities available
+to the developer environment.
+
+In particular, the agent environment is expected not to expose:
+
+- the host Podman socket
+- the host Kubernetes configuration
+- the host Git configuration
+- container-runtime connection environment variables
+
+`agent.sh` verifies both the expected repository mounts and these containment
+properties before starting OpenCode or an agent shell.
+
+Platform tools such as `kubectl`, `kind`, or `podman` may still exist as
+binaries inside the image. Containment is based on withholding the credentials,
+sockets, networking, and other capability channels that would grant access to
+the host or live cluster.
+
+This still allows useful local validation such as manifest rendering without
+granting the coding agent control over the local platform.
 
 ## Git
 
