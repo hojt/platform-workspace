@@ -2,6 +2,7 @@ version: "3"
 
 vars:
   REPOS: >-
+    .
     repos/homelab
     repos/local-platform
     repos/local-environments
