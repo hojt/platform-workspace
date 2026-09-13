@@ -42,6 +42,11 @@ Owns:
 Use this repository for the reasoning and documentation behind platform-level
 decisions.
 
+Treat accepted ADRs as historical records. Do not rewrite previous decisions
+to reflect the current architecture. Prefer a new ADR or explicit Superseded
+by / Refined by metadata. Corrections are limited to non-semantic errors such
+as typos or broken links.
+
 ### `local-platform`
 
 Owns:
