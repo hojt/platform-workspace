@@ -40,7 +40,9 @@ RUN dnf install -y \
         podman \
         procps-ng \
         ripgrep \
+        shellcheck \
         tar \
+        tree \
         unzip \
     && dnf clean all
 
