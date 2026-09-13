@@ -1,0 +1,41 @@
+version: "3"
+
+vars:
+  REPOS: >-
+    repos/homelab
+    repos/local-platform
+    repos/local-environments
+
+tasks:
+  status:
+    desc: Show Git status for all workspace repositories
+    cmds:
+      - |
+        set -eu
+
+        for repo in {{.REPOS}}; do
+          printf '\n== %s ==\n' "${repo}"
+          git -C "${repo}" status --short --branch
+        done
+
+  diff:
+    desc: Show unstaged changes for all workspace repositories
+    cmds:
+      - |
+        set -eu
+
+        for repo in {{.REPOS}}; do
+          printf '\n== %s ==\n' "${repo}"
+          git -C "${repo}" diff
+        done
+
+  diff:staged:
+    desc: Show staged changes for all workspace repositories
+    cmds:
+      - |
+        set -eu
+
+        for repo in {{.REPOS}}; do
+          printf '\n== %s ==\n' "${repo}"
+          git -C "${repo}" diff --staged
+        done
