@@ -6,54 +6,35 @@ repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_name="$(basename -- "${repo_root}")"
 agent_devcontainer_config="${repo_root}/.devcontainer/agent/devcontainer.json"
 
-mode="dev"
-entrypoint="opencode"
+mode="${1:-dev}"
 
 green=""
 red=""
 reset=""
 
 usage() {
-  printf 'Usage: %s [rebuild] [shell]\n' "${0}"
+  printf 'Usage: %s [rebuild|shell]\n' "${0}"
 }
 
 parse_arguments() {
-  if (($# > 2)); then
+  if (($# > 1)); then
     usage >&2
     exit 2
   fi
 
-  local argument
-
-  for argument in "$@"; do
-    case "${argument}" in
-    rebuild)
-      if [[ "${mode}" == "rebuild" ]]; then
-        printf 'Duplicate command: rebuild\n' >&2
-        usage >&2
-        exit 2
-      fi
-      mode="rebuild"
-      ;;
-    shell)
-      if [[ "${entrypoint}" == "shell" ]]; then
-        printf 'Duplicate command: shell\n' >&2
-        usage >&2
-        exit 2
-      fi
-      entrypoint="shell"
-      ;;
-    -h | --help)
-      usage
-      exit 0
-      ;;
-    *)
-      printf 'Unknown command: %s\n' "${argument}" >&2
-      usage >&2
-      exit 2
-      ;;
-    esac
-  done
+  case "${mode}" in
+  dev | rebuild | shell)
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    printf 'Unknown command: %s\n' "${mode}" >&2
+    usage >&2
+    exit 2
+    ;;
+  esac
 }
 
 init_colors() {
@@ -262,6 +243,26 @@ open_troubleshooting_shell() {
   exec "${SHELL:-/bin/bash}" -l
 }
 
+open_existing_agent_shell() {
+  if ! verify_agent_environment; then
+    open_troubleshooting_shell \
+      "Agent container is not running or does not match expected containment. Start it with ./agent.sh"
+  fi
+
+  echo
+  echo "Opening additional shell in ${repo_name} agent container"
+  echo
+
+  if ! exec devcontainer exec \
+    --workspace-folder "${repo_root}" \
+    --config "${agent_devcontainer_config}" \
+    --docker-path podman \
+    bash --login; then
+    open_troubleshooting_shell \
+      "Agent container is not running. Start it with ./agent.sh"
+  fi
+}
+
 enter_devcontainer() {
   local -a up_arguments=(
     --workspace-folder "${repo_root}"
@@ -288,38 +289,20 @@ enter_devcontainer() {
 
   echo
 
-  case "${entrypoint}" in
-  opencode)
-    echo "Starting OpenCode in ${repo_name}"
-    echo
+  echo "Starting OpenCode in ${repo_name}"
+  echo
 
-    exec devcontainer exec \
-      --workspace-folder "${repo_root}" \
-      --config "${agent_devcontainer_config}" \
-      --docker-path podman \
-      opencode
-    ;;
-  shell)
-    echo "Opening shell in ${repo_name} agent container"
-    echo
-
-    exec devcontainer exec \
-      --workspace-folder "${repo_root}" \
-      --config "${agent_devcontainer_config}" \
-      --docker-path podman \
-      bash -l
-    ;;
-  esac
+  exec devcontainer exec \
+    --workspace-folder "${repo_root}" \
+    --config "${agent_devcontainer_config}" \
+    --docker-path podman \
+    opencode
 }
 
 start_tmux_session() {
   local session_name
 
-  if [[ "${entrypoint}" == "shell" ]]; then
-    session_name="$(printf '%s-agent-shell' "${repo_name}" | tr -c '[:alnum:]_-' '-')"
-  else
-    session_name="$(printf '%s-agent' "${repo_name}" | tr -c '[:alnum:]_-' '-')"
-  fi
+  session_name="$(printf '%s-agent' "${repo_name}" | tr -c '[:alnum:]_-' '-')"
 
   if [[ "${AGENT_SH_INSIDE_SESSION:-}" == "1" ]]; then
     enter_devcontainer
@@ -327,8 +310,10 @@ start_tmux_session() {
 
   if [[ "${mode}" == "rebuild" ]] &&
     tmux has-session -t "=${session_name}" 2>/dev/null; then
-    echo "Stopping existing tmux session: ${session_name}"
-    tmux kill-session -t "=${session_name}"
+    printf 'Cannot rebuild while the agent session is active: %s\n' \
+      "${session_name}" >&2
+    echo "Exit the active agent session before running ./agent.sh rebuild." >&2
+    exit 1
   fi
 
   if tmux has-session -t "=${session_name}" 2>/dev/null; then
@@ -339,31 +324,12 @@ start_tmux_session() {
     fi
   fi
 
-  local -a script_arguments=()
-
-  if [[ "${mode}" == "rebuild" ]]; then
-    script_arguments+=(rebuild)
-  fi
-
-  if [[ "${entrypoint}" == "shell" ]]; then
-    script_arguments+=(shell)
-  fi
-
-  local session_command="AGENT_SH_INSIDE_SESSION=1"
+  local session_command
 
   printf -v session_command \
-    '%s %q' \
-    "${session_command}" \
-    "${repo_root}/agent.sh"
-
-  local argument
-
-  for argument in "${script_arguments[@]}"; do
-    printf -v session_command \
-      '%s %q' \
-      "${session_command}" \
-      "${argument}"
-  done
+    'AGENT_SH_INSIDE_SESSION=1 %q %q' \
+    "${repo_root}/agent.sh" \
+    "${mode}"
 
   if [[ -n "${TMUX:-}" ]]; then
     tmux new-session \
@@ -388,5 +354,9 @@ if ! verify_host_environment; then
 fi
 
 echo
+
+if [[ "${mode}" == "shell" ]]; then
+  open_existing_agent_shell
+fi
 
 start_tmux_session
