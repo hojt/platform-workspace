@@ -55,3 +55,18 @@ tasks:
     desc: Show local platform status
     cmds:
       - task --taskfile repos/local-platform/Taskfile.yml status
+
+  environment:bootstrap:
+    desc: Bootstrap Argo CD applications
+    cmds:
+      - task --taskfile repos/local-environments/Taskfile.yml argocd:bootstrap
+
+  environment:refresh:
+    desc: Refresh all Argo CD applications
+    cmds:
+      - task --taskfile repos/local-environments/Taskfile.yml argocd:refresh
+
+  environment:apps:
+    desc: List Argo CD applications
+    cmds:
+      - task --taskfile repos/local-environments/Taskfile.yml argocd:apps
