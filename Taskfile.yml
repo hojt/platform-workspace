@@ -40,3 +40,18 @@ tasks:
           printf '\n== %s ==\n' "${repo}"
           git -C "${repo}" diff --staged
         done
+
+  platform:up:
+    desc: Create the local platform
+    cmds:
+      - task --taskfile repos/local-platform/Taskfile.yml up
+
+  platform:down:
+    desc: Delete the local platform
+    cmds:
+      - task --taskfile repos/local-platform/Taskfile.yml down
+
+  platform:status:
+    desc: Show local platform status
+    cmds:
+      - task --taskfile repos/local-platform/Taskfile.yml status
