@@ -166,6 +166,49 @@ check_agent_env_absent() {
   fi
 }
 
+check_agent_path_readonly() {
+  local path="$1"
+  local description="$2"
+
+  if agent_exec test ! -w "${path}"; then
+    check_passed "${description}"
+  else
+    check_failed "${description}"
+  fi
+}
+
+check_agent_mountpoint() {
+  local path="$1"
+  local description="$2"
+
+  if agent_exec mountpoint -q "${path}"; then
+    check_passed "${description}"
+  else
+    check_failed "${description}"
+  fi
+}
+
+check_agent_command_absent() {
+  local command_name="$1"
+  local description="$2"
+
+  if ! agent_exec sh -c "command -v ${command_name}" >/dev/null 2>&1; then
+    check_passed "${description}"
+  else
+    check_failed "${description}"
+  fi
+}
+
+check_agent_cannot_escalate() {
+  local description="$1"
+
+  if ! agent_exec sudo -n true >/dev/null 2>&1; then
+    check_passed "${description}"
+  else
+    check_failed "${description}"
+  fi
+}
+
 verify_agent_environment() {
   local status=0
 
@@ -218,6 +261,35 @@ verify_agent_environment() {
     "KUBECONFIG" \
     "KUBECONFIG is not configured" ||
     status=1
+
+  local protected_path
+  for protected_path in \
+    .devcontainer \
+    .git \
+    AGENTS.md \
+    Taskfile.yml \
+    agent.sh \
+    dev.sh \
+    scripts; do
+    check_agent_path_readonly \
+      "/workspace/${protected_path}" \
+      "${protected_path} is read-only" ||
+      status=1
+  done
+
+  check_agent_command_absent podman "podman is not installed" || status=1
+  check_agent_cannot_escalate "privilege escalation is not possible" || status=1
+
+  local isolated_path
+  for isolated_path in \
+    components/example-frontend/node_modules \
+    components/example-frontend/dist \
+    components/example-backend/target; do
+    check_agent_mountpoint \
+      "/workspace/${isolated_path}" \
+      "${isolated_path} is isolated" ||
+      status=1
+  done
 
   if ((status != 0)); then
     echo >&2
