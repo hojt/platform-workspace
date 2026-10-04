@@ -17,8 +17,10 @@
     // Run in dev-container (with access to podman-socket)
     "source=${localWorkspaceFolder}/Taskfile.yml,target=/workspaces/${localWorkspaceFolderBasename}/Taskfile.yml,type=bind,readonly",
     "source=${localWorkspaceFolder}/scripts,target=/workspaces/${localWorkspaceFolderBasename}/scripts,type=bind,readonly",
-    // Agent instructions
+    // Agent configuration
     "source=${localWorkspaceFolder}/AGENTS.md,target=/workspaces/${localWorkspaceFolderBasename}/AGENTS.md,type=bind,readonly",
+    "source=${localWorkspaceFolder}/opencode.json,target=/workspaces/${localWorkspaceFolderBasename}/opencode.json,type=bind,readonly",
+    "target=/workspaces/${localWorkspaceFolderBasename}/.opencode,type=tmpfs",
     // Agent-only caches and build output
     "source=example-app-agent-maven-cache,target=/home/developer/.m2,type=volume",
     "source=example-app-agent-npm-cache,target=/home/developer/.npm,type=volume",

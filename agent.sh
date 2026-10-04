@@ -280,6 +280,15 @@ verify_agent_environment() {
     "KUBECONFIG is not configured" ||
     status=1
 
+  check_agent_env_absent \
+    "SSH_AUTH_SOCK" \
+    "SSH agent is not forwarded" ||
+    status=1
+
+  check_agent "no credential-like environment variables" \
+    sh -c '! env | cut -d= -f1 | grep -Eiq "token|secret|passw|api_?key|credential|auth"' ||
+    status=1
+
   local protected_path
   for protected_path in \
     .devcontainer \
@@ -288,6 +297,7 @@ verify_agent_environment() {
     Taskfile.yml \
     agent.sh \
     dev.sh \
+    opencode.json \
     scripts; do
     check_agent_path_readonly \
       "${agent_workspace}/${protected_path}" \
@@ -300,6 +310,7 @@ verify_agent_environment() {
 
   local isolated_path
   for isolated_path in \
+    .opencode \
     components/example-frontend/node_modules \
     components/example-frontend/dist \
     components/example-backend/target; do
