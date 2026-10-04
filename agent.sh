@@ -4,12 +4,14 @@ set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_name="$(basename -- "${repo_root}")"
+agent_workspace="/workspaces/${repo_name}"
 agent_devcontainer_config="${repo_root}/.devcontainer/agent/devcontainer.json"
 
 mode="${1:-dev}"
 
 green=""
 red=""
+yellow=""
 reset=""
 
 usage() {
@@ -41,6 +43,7 @@ init_colors() {
   if [[ -t 1 ]]; then
     green=$'\033[32m'
     red=$'\033[31m'
+    yellow=$'\033[33m'
     reset=$'\033[0m'
   fi
 }
@@ -209,6 +212,28 @@ check_agent_cannot_escalate() {
   fi
 }
 
+check_agent() {
+  local description="$1"
+  shift
+
+  if agent_exec "$@" >/dev/null 2>&1; then
+    check_passed "${description}"
+  else
+    check_failed "${description}"
+  fi
+}
+
+warn_agent() {
+  local description="$1"
+  shift
+
+  if agent_exec "$@" >/dev/null 2>&1; then
+    check_passed "${description}"
+  else
+    printf '  %s!%s %s\n' "${yellow}" "${reset}" "${description}" >&2
+  fi
+}
+
 verify_agent_environment() {
   local status=0
 
@@ -217,20 +242,13 @@ verify_agent_environment() {
 
   init_colors
 
-  check_agent_repository \
-    "/workspace/repos/homelab" \
-    "homelab repository is available" ||
-    status=1
-
-  check_agent_repository \
-    "/workspace/repos/local-platform" \
-    "local-platform repository is available" ||
-    status=1
-
-  check_agent_repository \
-    "/workspace/repos/local-environments" \
-    "local-environments repository is available" ||
-    status=1
+  if ! check_agent_repository \
+    "${agent_workspace}" \
+    "${repo_name} repository is available"; then
+    echo >&2
+    echo "Cannot verify the agent environment." >&2
+    return 1
+  fi
 
   check_agent_socket_absent \
     "/run/podman/podman.sock" \
@@ -272,7 +290,7 @@ verify_agent_environment() {
     dev.sh \
     scripts; do
     check_agent_path_readonly \
-      "/workspace/${protected_path}" \
+      "${agent_workspace}/${protected_path}" \
       "${protected_path} is read-only" ||
       status=1
   done
@@ -286,10 +304,30 @@ verify_agent_environment() {
     components/example-frontend/dist \
     components/example-backend/target; do
     check_agent_mountpoint \
-      "/workspace/${isolated_path}" \
+      "${agent_workspace}/${isolated_path}" \
       "${isolated_path} is isolated" ||
       status=1
   done
+
+  check_agent "no new privileges" \
+    grep -qE '^NoNewPrivs:[[:space:]]+1$' /proc/self/status || status=1
+
+  check_agent "all capabilities dropped" \
+    grep -qE '^CapBnd:[[:space:]]+0+$' /proc/self/status || status=1
+
+  # Dev Container CLI always adds --security-opt label=disable for Podman.
+  # See ADR-0010 in hojt/homelab
+  warn_agent "SELinux confinement is active" \
+    sh -c 'grep -q ":container_t:" /proc/self/attr/current'
+
+  check_agent "memory limit is set" \
+    sh -c '[ "$(cat /sys/fs/cgroup/memory.max)" != max ]' || status=1
+
+  check_agent "process limit is set" \
+    sh -c '[ "$(cat /sys/fs/cgroup/pids.max)" != max ]' || status=1
+
+  check_agent "only this workspace is mounted" \
+    sh -c '[ "$(ls -A /workspaces)" = "$1" ]' _ "${repo_name}" || status=1
 
   if ((status != 0)); then
     echo >&2

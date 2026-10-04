@@ -76,7 +76,7 @@ RUN curl --fail --location --silent --show-error \
     && chmod +x /usr/local/bin/kubectl \
     && kubectl version --client
 
-WORKDIR /workspace
+WORKDIR /workspaces
 
 USER ${USERNAME}
 

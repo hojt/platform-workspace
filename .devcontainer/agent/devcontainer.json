@@ -5,42 +5,38 @@
     "context": "../..",
     "target": "agent"
   },
-  "workspaceFolder": "/workspace",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
-  "containerEnv": {
-    "OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER": "1"
-  },
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,relabel=shared",
   "mounts": [
-    "source=${localWorkspaceFolder}/../homelab,target=/workspace/repos/homelab,type=bind",
-    "source=${localWorkspaceFolder}/../local-platform,target=/workspace/repos/local-platform,type=bind",
-    "source=${localWorkspaceFolder}/../local-environments,target=/workspace/repos/local-environments,type=bind",
-
-    "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/developer/.local/share/opencode/auth.json,type=bind",
-
-
-    "source=${localWorkspaceFolder},target=/workspace,type=bind",
-    "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/developer/.local/share/opencode/auth.json,type=bind",
+    "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/developer/.local/share/opencode/auth.json,type=bind,relabel=shared",
     // Run or interpreted on the host
-    "source=${localWorkspaceFolder}/.devcontainer,target=/workspace/.devcontainer,type=bind,readonly",
-    "source=${localWorkspaceFolder}/agent.sh,target=/workspace/agent.sh,type=bind,readonly",
-    "source=${localWorkspaceFolder}/dev.sh,target=/workspace/dev.sh,type=bind,readonly",
-    "source=${localWorkspaceFolder}/.git,target=/workspace/.git,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.devcontainer,target=/workspaces/${localWorkspaceFolderBasename}/.devcontainer,type=bind,readonly",
+    "source=${localWorkspaceFolder}/agent.sh,target=/workspaces/${localWorkspaceFolderBasename}/agent.sh,type=bind,readonly",
+    "source=${localWorkspaceFolder}/dev.sh,target=/workspaces/${localWorkspaceFolderBasename}/dev.sh,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.git,target=/workspaces/${localWorkspaceFolderBasename}/.git,type=bind,readonly",
     // Run in dev-container (with access to podman-socket)
-    "source=${localWorkspaceFolder}/Taskfile.yml,target=/workspace/Taskfile.yml,type=bind,readonly",
-    "source=${localWorkspaceFolder}/scripts,target=/workspace/scripts,type=bind,readonly",
+    "source=${localWorkspaceFolder}/Taskfile.yml,target=/workspaces/${localWorkspaceFolderBasename}/Taskfile.yml,type=bind,readonly",
+    "source=${localWorkspaceFolder}/scripts,target=/workspaces/${localWorkspaceFolderBasename}/scripts,type=bind,readonly",
     // Agent instructions
-    "source=${localWorkspaceFolder}/AGENTS.md,target=/workspace/AGENTS.md,type=bind,readonly",
+    "source=${localWorkspaceFolder}/AGENTS.md,target=/workspaces/${localWorkspaceFolderBasename}/AGENTS.md,type=bind,readonly",
     // Agent-only caches and build output
     "source=example-app-agent-maven-cache,target=/home/developer/.m2,type=volume",
     "source=example-app-agent-npm-cache,target=/home/developer/.npm,type=volume",
-    "source=example-app-agent-frontend-node-modules,target=/workspace/components/example-frontend/node_modules,type=volume",
-    "source=example-app-agent-frontend-dist,target=/workspace/components/example-frontend/dist,type=volume",
-    "source=example-app-agent-backend-target,target=/workspace/components/example-backend/target,type=volume"
+    "source=example-app-agent-frontend-node-modules,target=/workspaces/${localWorkspaceFolderBasename}/components/example-frontend/node_modules,type=volume",
+    "source=example-app-agent-frontend-dist,target=/workspaces/${localWorkspaceFolderBasename}/components/example-frontend/dist,type=volume",
+    "source=example-app-agent-backend-target,target=/workspaces/${localWorkspaceFolderBasename}/components/example-backend/target,type=volume"
   ],
   "runArgs": [
-    "--security-opt=label=disable"
+    "--cap-drop=ALL",
+    "--security-opt=no-new-privileges",
+    "--memory=16g",
+    "--cpus=8",
+    "--pids-limit=2048"
   ],
   "remoteUser": "developer",
   "containerUser": "developer",
+  "containerEnv": {
+    "OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER": "1"
+  },
   "updateRemoteUserUID": true
 }

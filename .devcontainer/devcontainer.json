@@ -5,17 +5,13 @@
     "context": "..",
     "target": "development"
   },
-  "workspaceFolder": "/workspace",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
-  "runArgs": [
-    "--network=host",
-    "--security-opt=label=disable"
-  ],
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind",
+  "containerEnv": {
+    "CONTAINER_HOST": "unix:///run/podman/podman.sock",
+    "DOCKER_HOST": "unix:///run/podman/podman.sock"
+  },
   "mounts": [
-    "source=${localWorkspaceFolder}/../homelab,target=/workspace/repos/homelab,type=bind",
-    "source=${localWorkspaceFolder}/../local-platform,target=/workspace/repos/local-platform,type=bind",
-    "source=${localWorkspaceFolder}/../local-environments,target=/workspace/repos/local-environments,type=bind",
-
     "source=${localEnv:XDG_RUNTIME_DIR}/podman/podman.sock,target=/run/podman/podman.sock,type=bind",
     "source=${localEnv:HOME}/.kube,target=/home/developer/.kube,type=bind",
     "source=${localEnv:HOME}/.config/nvim,target=/home/developer/.config/nvim,type=bind",
