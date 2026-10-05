@@ -40,7 +40,7 @@
     "no_proxy": "localhost,127.0.0.1",
     "NODE_USE_ENV_PROXY": "1",
     "AGENT_PROXY_HOST": "${localWorkspaceFolderBasename}-agent-proxy",
-    "MAVEN_ARGS": "--global-settings /workspaces/${localWorkspaceFolderBasename}/.devcontainer/agent/maven-settings.xml"
+    "MAVEN_ARGS": "--global-settings /workspaces/${localWorkspaceFolderBasename}/.devcontainer/agent/maven-settings.xml -Dmaven.clean.failOnError=false"
   },
   "updateRemoteUserUID": true
 }
