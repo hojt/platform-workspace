@@ -20,6 +20,7 @@ reset=""
 
 usage() {
   printf 'Usage: %s [rebuild|shell|proxy-log]\n' "${0}"
+  printf '  PROXY_LOG_SINCE=<time>  limit proxy-log (e.g. -1h, today)\n'
 }
 
 parse_arguments() {
@@ -458,23 +459,28 @@ open_existing_agent_shell() {
 }
 
 show_proxy_log() {
-  journalctl --user CONTAINER_NAME="${agent_proxy}" -o cat | awk '
-    /CONNECT / {
-      match($0, /CONNECT [^: ]+/)
-      host = substr($0, RSTART + 8, RLENGTH - 8)
-      requests[host]++
-    }
-    /refused on filtered domain/ {
+  local -a since_arguments=()
+
+  if [[ -n "${PROXY_LOG_SINCE:-}" ]]; then
+    since_arguments=(--since "${PROXY_LOG_SINCE}")
+  fi
+
+  journalctl --user CONTAINER_NAME="${agent_proxy}" -o cat "${since_arguments[@]}" | awk '
+    function quoted_host() {
       match($0, /"[^"]+"/)
-      host = substr($0, RSTART + 1, RLENGTH - 2)
-      refused[host]++
+      return substr($0, RSTART + 1, RLENGTH - 2)
     }
+    /Established connection to host "/ { allowed[quoted_host()]++ }
+    /refused on filtered domain "/      { refused[quoted_host()]++ }
     END {
-      for (host in requests) printf "%8d %8d  %s\n", requests[host], refused[host], host
-      for (host in refused) if (!(host in requests)) printf "%8d %8d  %s\n", 0, refused[host], host
+      for (host in allowed) hosts[host] = 1
+      for (host in refused) hosts[host] = 1
+      for (host in hosts) {
+        printf "%8d %8d %8d  %s\n", allowed[host] + refused[host], allowed[host], refused[host], host
+      }
     }
   ' | sort -rn | {
-    printf "%8s %8s  %s\n" requests refused host
+    printf "%8s %8s %8s  %s\n" total allowed refused host
     cat
   }
 }
