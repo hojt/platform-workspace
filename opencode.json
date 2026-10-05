@@ -2,20 +2,20 @@
   "$schema": "https://opencode.ai/config.json",
   "autoupdate": false,
   "permission": {
-    "*": "ask",
+    "*": "allow",
     "edit": {
       "*": "allow",
       ".opencode/**": "deny"
     },
-    "webfetch": "ask",
     "bash": {
-      "*": "ask",
-      "git status*": "allow",
-      "git diff*": "allow",
-      "git log*": "allow",
-      "ls *": "allow",
-      "rg *": "allow",
-      "grep *": "allow"
-    }
+      "*": "allow",
+      "rm *": "ask",
+      "npm publish*": "deny",
+      "./mvnw deploy*": "deny",
+      "mvn deploy*": "deny"
+    },
+    "webfetch": "ask",
+    "external_directory": "ask",
+    "doom_loop": "ask"
   }
 }
