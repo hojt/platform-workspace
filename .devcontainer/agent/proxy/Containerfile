@@ -6,6 +6,7 @@ RUN dnf install -y tinyproxy \
     && dnf clean all
 
 COPY tinyproxy.conf /etc/tinyproxy/tinyproxy.conf
+COPY allowlist /etc/tinyproxy/allowlist
 
 USER nobody
 

@@ -1,0 +1,12 @@
+# Hosts the coding agent may reach through the egress proxy. See ADR-0010.
+# One fnmatch pattern per line, matched against the full host name.
+
+# Package registries
+registry.npmjs.org
+repo.maven.apache.org
+
+# Opencode model catalog
+models.opencode.ai
+
+# Model provider
+chatgpt.com

@@ -19,7 +19,7 @@ yellow=""
 reset=""
 
 usage() {
-  printf 'Usage: %s [rebuild|shell]\n' "${0}"
+  printf 'Usage: %s [rebuild|shell|proxy-log]\n' "${0}"
 }
 
 parse_arguments() {
@@ -29,7 +29,7 @@ parse_arguments() {
   fi
 
   case "${mode}" in
-  dev | rebuild | shell)
+  dev | rebuild | shell | proxy-log)
     ;;
   -h | --help)
     usage
@@ -273,6 +273,10 @@ verify_agent_environment() {
     curl --silent --max-time 10 --output /dev/null https://registry.npmjs.org ||
     status=1
 
+  check_agent "hosts outside the allowlist are denied" \
+    sh -c '! curl --silent --max-time 10 --output /dev/null https://example.com' ||
+    status=1
+
   check_agent_socket_absent \
     "/run/podman/podman.sock" \
     "host Podman socket is not exposed" ||
@@ -406,6 +410,7 @@ start_agent_proxy() {
     --detach \
     --replace \
     --name "${agent_proxy}" \
+    --log-driver=journald \
     --network "${agent_egress_network}" \
     --network "${agent_network}" \
     --read-only \
@@ -450,6 +455,28 @@ open_existing_agent_shell() {
     open_troubleshooting_shell \
       "Agent container is not running. Start it with ./agent.sh"
   fi
+}
+
+show_proxy_log() {
+  journalctl --user CONTAINER_NAME="${agent_proxy}" -o cat | awk '
+    /CONNECT / {
+      match($0, /CONNECT [^: ]+/)
+      host = substr($0, RSTART + 8, RLENGTH - 8)
+      requests[host]++
+    }
+    /refused on filtered domain/ {
+      match($0, /"[^"]+"/)
+      host = substr($0, RSTART + 1, RLENGTH - 2)
+      refused[host]++
+    }
+    END {
+      for (host in requests) printf "%8d %8d  %s\n", requests[host], refused[host], host
+      for (host in refused) if (!(host in requests)) printf "%8d %8d  %s\n", 0, refused[host], host
+    }
+  ' | sort -rn | {
+    printf "%8s %8s  %s\n" requests refused host
+    cat
+  }
 }
 
 enter_devcontainer() {
@@ -540,6 +567,11 @@ start_tmux_session() {
 }
 
 parse_arguments "$@"
+
+if [[ "${mode}" == "proxy-log" ]]; then
+  show_proxy_log
+  exit 0
+fi
 
 if ! verify_host_environment; then
   exit 1
