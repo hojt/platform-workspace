@@ -123,6 +123,9 @@ The presence of tools such as `kubectl`, `kind`, or `podman` does not imply that
 the agent should have access to the host container runtime or Kubernetes
 cluster.
 
+Dependencies are not shared with the developer environment. Run `npm install`
+in a frontend component before building or testing it.
+
 ### Agent containment
 
 The development environment is intentionally designed to contain the coding
