@@ -5,23 +5,15 @@
     "context": "../..",
     "target": "agent"
   },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,readonly,relabel=shared",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,relabel=shared",
   "mounts": [
     "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/developer/.local/share/opencode/auth.json,type=bind,relabel=shared",
-    // Run or interpreted on the host
-    "source=${localWorkspaceFolder}/.devcontainer,target=/workspaces/${localWorkspaceFolderBasename}/.devcontainer,type=bind,readonly",
-    "source=${localWorkspaceFolder}/agent.sh,target=/workspaces/${localWorkspaceFolderBasename}/agent.sh,type=bind,readonly",
-    "source=${localWorkspaceFolder}/dev.sh,target=/workspaces/${localWorkspaceFolderBasename}/dev.sh,type=bind,readonly",
-    "source=${localWorkspaceFolder}/.git,target=/workspaces/${localWorkspaceFolderBasename}/.git,type=bind,readonly",
-    // Run in dev-container (with access to podman-socket)
-    "source=${localWorkspaceFolder}/Taskfile.yml,target=/workspaces/${localWorkspaceFolderBasename}/Taskfile.yml,type=bind,readonly",
-    "source=${localWorkspaceFolder}/scripts,target=/workspaces/${localWorkspaceFolderBasename}/scripts,type=bind,readonly",
-    // Agent configuration
-    "source=${localWorkspaceFolder}/AGENTS.md,target=/workspaces/${localWorkspaceFolderBasename}/AGENTS.md,type=bind,readonly",
-    "source=${localWorkspaceFolder}/opencode.json,target=/workspaces/${localWorkspaceFolderBasename}/opencode.json,type=bind,readonly",
+    // The workspace is read-only; explicitly state what is writable
+    "source=${localWorkspaceFolder}/components,target=/workspaces/${localWorkspaceFolderBasename}/components,type=bind",
+    "source=${localWorkspaceFolder}/docs,target=/workspaces/${localWorkspaceFolderBasename}/docs,type=bind",
+    // Agent-only state
     "target=/workspaces/${localWorkspaceFolderBasename}/.opencode,type=tmpfs",
-    // Agent-only caches and build output
     "source=example-app-agent-maven-cache,target=/home/developer/.m2,type=volume",
     "source=example-app-agent-npm-cache,target=/home/developer/.npm,type=volume",
     "source=example-app-agent-frontend-node-modules,target=/workspaces/${localWorkspaceFolderBasename}/components/example-frontend/node_modules,type=volume",
