@@ -29,6 +29,7 @@
     "source=example-app-agent-backend-target,target=/workspaces/${localWorkspaceFolderBasename}/components/example-backend/target,type=volume"
   ],
   "runArgs": [
+    "--network=${localWorkspaceFolderBasename}-agent",
     "--cap-drop=ALL",
     "--security-opt=no-new-privileges",
     "--memory=16g",
@@ -38,7 +39,16 @@
   "remoteUser": "developer",
   "containerUser": "developer",
   "containerEnv": {
-    "OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER": "1"
+    "OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER": "1",
+    "HTTP_PROXY": "http://${localWorkspaceFolderBasename}-agent-proxy:8888",
+    "HTTPS_PROXY": "http://${localWorkspaceFolderBasename}-agent-proxy:8888",
+    "http_proxy": "http://${localWorkspaceFolderBasename}-agent-proxy:8888",
+    "https_proxy": "http://${localWorkspaceFolderBasename}-agent-proxy:8888",
+    "NO_PROXY": "localhost,127.0.0.1",
+    "no_proxy": "localhost,127.0.0.1",
+    "NODE_USE_ENV_PROXY": "1",
+    "AGENT_PROXY_HOST": "${localWorkspaceFolderBasename}-agent-proxy",
+    "MAVEN_ARGS": "--global-settings /workspaces/${localWorkspaceFolderBasename}/.devcontainer/agent/maven-settings.xml"
   },
   "updateRemoteUserUID": true
 }

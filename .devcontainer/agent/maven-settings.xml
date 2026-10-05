@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Routes Maven through the agent egress proxy. See ADR-0010. -->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <proxies>
+    <proxy>
+      <id>agent-egress-https</id>
+      <active>true</active>
+      <protocol>https</protocol>
+      <host>${env.AGENT_PROXY_HOST}</host>
+      <port>8888</port>
+    </proxy>
+    <proxy>
+      <id>agent-egress-http</id>
+      <active>true</active>
+      <protocol>http</protocol>
+      <host>${env.AGENT_PROXY_HOST}</host>
+      <port>8888</port>
+    </proxy>
+  </proxies>
+</settings>

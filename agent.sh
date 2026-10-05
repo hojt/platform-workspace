@@ -6,6 +6,10 @@ repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_name="$(basename -- "${repo_root}")"
 agent_workspace="/workspaces/${repo_name}"
 agent_devcontainer_config="${repo_root}/.devcontainer/agent/devcontainer.json"
+agent_network="${repo_name}-agent"
+agent_egress_network="${repo_name}-agent-egress"
+agent_proxy="${repo_name}-agent-proxy"
+agent_proxy_dir="${repo_root}/.devcontainer/agent/proxy"
 
 mode="${1:-dev}"
 
@@ -250,6 +254,14 @@ verify_agent_environment() {
     return 1
   fi
 
+  check_agent "direct internet access is blocked" \
+    sh -c '! curl --noproxy "*" --silent --max-time 5 --output /dev/null https://example.com' ||
+    status=1
+
+  check_agent "egress proxy is reachable" \
+    curl --silent --max-time 10 --output /dev/null https://registry.npmjs.org ||
+    status=1
+
   check_agent_socket_absent \
     "/run/podman/podman.sock" \
     "host Podman socket is not exposed" ||
@@ -348,6 +360,40 @@ verify_agent_environment() {
   return "${status}"
 }
 
+ensure_agent_network() {
+  if ! podman network exists "${agent_network}"; then
+    echo "Creating internal network ${agent_network}"
+    podman network create --internal "${agent_network}" >/dev/null
+  fi
+
+  if ! podman network exists "${agent_egress_network}"; then
+    echo "Creating egress network ${agent_egress_network}"
+    podman network create "${agent_egress_network}" >/dev/null
+  fi
+}
+
+start_agent_proxy() {
+  echo "Starting egress proxy ${agent_proxy}"
+
+  podman build \
+    --quiet \
+    --tag "${agent_proxy}" \
+    "${agent_proxy_dir}" >/dev/null
+
+  podman run \
+    --detach \
+    --replace \
+    --name "${agent_proxy}" \
+    --network "${agent_egress_network}" \
+    --network "${agent_network}" \
+    --read-only \
+    --cap-drop=ALL \
+    --security-opt=no-new-privileges \
+    --memory=256m \
+    --pids-limit=128 \
+    "${agent_proxy}" >/dev/null
+}
+
 open_troubleshooting_shell() {
   local message="$1"
 
@@ -397,6 +443,9 @@ enter_devcontainer() {
   else
     echo "Starting agent container"
   fi
+
+  ensure_agent_network
+  start_agent_proxy
 
   if ! devcontainer up "${up_arguments[@]}"; then
     open_troubleshooting_shell \
