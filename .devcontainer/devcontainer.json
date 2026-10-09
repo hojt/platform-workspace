@@ -1,5 +1,5 @@
 {
-  "name": "platform-workspace",
+  "name": "${localWorkspaceFolderBasename}",
   "build": {
     "dockerfile": "Containerfile",
     "context": "..",
@@ -16,7 +16,11 @@
     "source=${localEnv:HOME}/.kube,target=/home/developer/.kube,type=bind",
     "source=${localEnv:HOME}/.config/nvim,target=/home/developer/.config/nvim,type=bind",
     "source=${localEnv:HOME}/.gitconfig,target=/home/developer/.gitconfig,type=bind,readonly",
-    "source=platform-workspace-nvim-data,target=/home/developer/.local/share/nvim,type=volume"
+    "source=${localWorkspaceFolderBasename}-nvim-data,target=/home/developer/.local/share/nvim,type=volume"
+  ],
+  "runArgs": [
+    "--security-opt=label=disable",
+    "--publish=127.0.0.1:5173:5173"
   ],
   "containerEnv": {
     "CONTAINER_HOST": "unix:///run/podman/podman.sock",

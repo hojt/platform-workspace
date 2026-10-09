@@ -1,5 +1,5 @@
 {
-  "name": "platform-workspace-agent",
+  "name": "${localWorkspaceFolderBasename}-agent",
   "build": {
     "dockerfile": "../Containerfile",
     "context": "../..",
@@ -14,11 +14,11 @@
     "source=${localWorkspaceFolder}/docs,target=/workspaces/${localWorkspaceFolderBasename}/docs,type=bind",
     // Agent-only state
     "target=/workspaces/${localWorkspaceFolderBasename}/.opencode,type=tmpfs",
-    "source=example-app-agent-maven-cache,target=/home/developer/.m2,type=volume",
-    "source=example-app-agent-npm-cache,target=/home/developer/.npm,type=volume",
-    "source=example-app-agent-frontend-node-modules,target=/workspaces/${localWorkspaceFolderBasename}/components/example-frontend/node_modules,type=volume",
-    "source=example-app-agent-frontend-dist,target=/workspaces/${localWorkspaceFolderBasename}/components/example-frontend/dist,type=volume",
-    "source=example-app-agent-backend-target,target=/workspaces/${localWorkspaceFolderBasename}/components/example-backend/target,type=volume"
+    "source=${localWorkspaceFolderBasename}-agent-maven-cache,target=/home/developer/.m2,type=volume",
+    "source=${localWorkspaceFolderBasename}-agent-npm-cache,target=/home/developer/.npm,type=volume",
+    "source=${localWorkspaceFolderBasename}-agent-frontend-node-modules,target=/workspaces/${localWorkspaceFolderBasename}/components/example-frontend/node_modules,type=volume",
+    "source=${localWorkspaceFolderBasename}-agent-frontend-dist,target=/workspaces/${localWorkspaceFolderBasename}/components/example-frontend/dist,type=volume",
+    "source=${localWorkspaceFolderBasename}-agent-backend-target,target=/workspaces/${localWorkspaceFolderBasename}/components/example-backend/target,type=volume"
   ],
   "runArgs": [
     "--network=${localWorkspaceFolderBasename}-agent",
