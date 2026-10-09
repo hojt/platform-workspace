@@ -1,5 +1,5 @@
 ARG USERNAME=developer
-ARG BASE_IMAGE=registry.fedoraproject.org/fedora:43@sha256:c5e15bd1e07c25904d0c5b9865fb7ee4589f8ca234e635742b0c1195838f4bfd
+ARG BASE_IMAGE=registry.fedoraproject.org/fedora:43@sha256:c45b30a84cf2fb151e3d8f8683707ce42356f674357f10951b4dd71014a502f3
 
 FROM ${BASE_IMAGE} AS base
 
