@@ -20,7 +20,7 @@
   ],
   "runArgs": [
     "--security-opt=label=disable",
-    "--publish=127.0.0.1:5173:5173"
+    "--publish=127.0.0.1::5173"
   ],
   "containerEnv": {
     "CONTAINER_HOST": "unix:///run/podman/podman.sock",
