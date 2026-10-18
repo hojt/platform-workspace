@@ -12,7 +12,7 @@ ignored.
 The coding-agent environment presents:
 
 ```text
-/workspace/
+/workspaces/platform-workspace/
 ├── README.md
 ├── AGENTS.md
 ├── dev.sh
@@ -23,10 +23,10 @@ The coding-agent environment presents:
     └── local-environments/
 ```
 
-`/workspace` is the `platform-workspace` repository.
+`/workspaces/platform-workspace` is the `platform-workspace` repository.
 
-The repositories under `/workspace/repos/` are independent Git repositories
-bind-mounted into the workspace.
+The repositories under `/workspaces/platform-workspace/repos/` are
+independent Git repositories, bind-mounted read-only into the workspace.
 
 ## Repository responsibilities
 
@@ -115,9 +115,11 @@ The human developer and coding agent use separate environments.
 The developer environment may include capabilities required to operate and
 inspect the local platform.
 
-The coding-agent environment intentionally receives a narrower capability set.
-It has read/write access to the workspace repositories but must not assume it has
-the privileges available to the developer environment.
+The coding-agent environment intentionally receives a narrower capability set
+and must not assume it has the privileges available to the developer
+environment. The agent can read all repositories. What it may write, and
+what is hidden from it, is described in `.devcontainer/agent/sandbox.conf`
+and under [Agent containment](#agent-containment).
 
 The presence of tools such as `kubectl`, `kind`, or `podman` does not imply that
 the agent should have access to the host container runtime or Kubernetes

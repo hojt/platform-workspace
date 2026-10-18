@@ -160,13 +160,26 @@ This environment is for the human developer.
 
 ### Coding-agent environment
 
-Start OpenCode in the contained coding-agent environment with:
+Start OpenCode, the default agent tool, in the contained coding-agent
+environment with:
 
 ```bash
 ./agent.sh
 ```
 
-Rebuild it with:
+Start Claude Code instead with:
+
+```bash
+./agent.sh claude
+```
+
+Each workspace keeps its own agent state. Log in to OpenCode once per
+workspace from an agent shell with `opencode auth login`. Claude Code
+uses a token shared by all workspaces, created once with
+`claude setup-token` and stored on the host in
+`~/.config/claude-agent/oauth-token`.
+
+Rebuild the coding-agent environment with:
 
 ```bash
 ./agent.sh rebuild
@@ -185,10 +198,13 @@ what is explicitly made writable:
 - the workspace and the platform repositories are mounted read-only,
   including their Git metadata and host scripts;
 - `repos/homelab/docs/` is writable, so that the agent can help with
-  documentation;
+  documentation, except `docs/adr/`, which stays read-only because it
+  holds accepted decisions;
 - the `.local/` directories of `local-platform` and `local-environments`
   are hidden behind empty mounts, so that local key material never
   reaches the agent.
+
+The authoritative list is `.devcontainer/agent/sandbox.conf`.
 
 The agent environment does not receive the privileged host capabilities
 available to the developer environment. In particular, it does not have:
@@ -203,11 +219,13 @@ All outbound traffic goes through an egress proxy that only allows the
 hosts listed in `.devcontainer/agent/proxy/allowlist`. Show which hosts
 the agent has reached or been refused with:
 
-    ./agent.sh proxy-log
+```bash
+./agent.sh proxy-log
+```
 
 `agent.sh` verifies the repository mounts and every containment property
-above before starting OpenCode or an agent shell, and refuses to start if
-any of them does not hold.
+above before starting the agent tool or an agent shell, and refuses to
+start if any of them does not hold.
 
 `kubectl` and `kind` exist in the image for local validation such as
 manifest rendering. Without credentials or network access to the
