@@ -424,6 +424,13 @@ verify_agent_environment() {
       status=1
   done
 
+  for path in \
+    "${baseline_isolated_paths[@]}" \
+    "${agent_isolated_paths[@]}"; do
+    check_agent_path_writable "${agent_workspace}/${path}" "${path} is writable" ||
+      status=1
+  done
+
   for path in "${agent_hidden_paths[@]}"; do
     # shellcheck disable=SC2016
     check_agent "${path} is hidden" \

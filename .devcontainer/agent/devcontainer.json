@@ -24,8 +24,8 @@
     "target=/workspaces/${localWorkspaceFolderBasename}/repos/local-platform/.local,type=tmpfs,notmpcopyup",
     "target=/workspaces/${localWorkspaceFolderBasename}/repos/local-environments/.local,type=tmpfs,notmpcopyup",
     // Agent-only state
-    "target=/workspaces/${localWorkspaceFolderBasename}/.opencode,type=tmpfs,notmpcopyup",
-    "target=/workspaces/${localWorkspaceFolderBasename}/.claude,type=tmpfs,notmpcopyup"
+    "target=/workspaces/${localWorkspaceFolderBasename}/.opencode,type=tmpfs,notmpcopyup,tmpfs-mode=1777",
+    "target=/workspaces/${localWorkspaceFolderBasename}/.claude,type=tmpfs,notmpcopyup,tmpfs-mode=1777"
   ],
   "runArgs": [
     "--network=${localWorkspaceFolderBasename}-agent",
