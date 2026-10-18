@@ -18,6 +18,8 @@
     "source=${localWorkspaceFolder}/../local-environments,target=/workspaces/${localWorkspaceFolderBasename}/repos/local-environments,type=bind,readonly,relabel=shared",
     // Explicitly writable
     "source=${localWorkspaceFolder}/../homelab/docs,target=/workspaces/${localWorkspaceFolderBasename}/repos/homelab/docs,type=bind",
+    // Accepted decisions stay read-only inside the writable docs
+    "source=${localWorkspaceFolder}/../homelab/docs/adr,target=/workspaces/${localWorkspaceFolderBasename}/repos/homelab/docs/adr,type=bind,readonly",
     // Hidden from the agent
     "target=/workspaces/${localWorkspaceFolderBasename}/repos/local-platform/.local,type=tmpfs,notmpcopyup",
     "target=/workspaces/${localWorkspaceFolderBasename}/repos/local-environments/.local,type=tmpfs,notmpcopyup",
