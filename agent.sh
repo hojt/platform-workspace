@@ -10,6 +10,7 @@ agent_network="${repo_name}-agent"
 agent_egress_network="${repo_name}-agent-egress"
 agent_proxy="${repo_name}-agent-proxy"
 agent_proxy_dir="${repo_root}/.devcontainer/agent/proxy"
+claude_token_file="${XDG_CONFIG_HOME:-${HOME}/.config}/claude-agent/oauth-token"
 
 baseline_protected_paths=(
   .
@@ -27,6 +28,7 @@ baseline_isolated_paths=(
   .opencode
   .claude
   /home/developer/.local/share/opencode
+  /home/developer/.claude
 )
 
 # Defaults; .devcontainer/agent/sandbox.conf describes the actual layout.
@@ -151,17 +153,6 @@ check_host_repository() {
   fi
 }
 
-check_directory() {
-  local directory_path="$1"
-  local description="$2"
-
-  if [[ -d "${directory_path}" ]]; then
-    check_passed "${description}"
-  else
-    check_failed "${description} (create with: mkdir -m 700 -p ${directory_path})"
-  fi
-}
-
 verify_host_environment() {
   local status=0
 
@@ -191,10 +182,12 @@ verify_host_environment() {
       status=1
   done
 
-  check_directory \
-    "${HOME}/.local/share/claude-agent" \
-    "Claude Code login directory" ||
-    status=1
+  if [[ "${agent_tool}" == "claude" ]]; then
+    check_file \
+      "${claude_token_file}" \
+      "Claude Code token (create with: claude setup-token)" ||
+      status=1
+  fi
 
   if ((status != 0)); then
     echo >&2
@@ -629,13 +622,21 @@ enter_devcontainer() {
   echo "Starting ${agent_tool} in ${repo_name}"
   echo
 
+  local -a exec_arguments=(
+    --workspace-folder "${repo_root}"
+    --config "${agent_devcontainer_config}"
+    --docker-path podman
+  )
+
+  if [[ "${agent_tool}" == "claude" ]]; then
+    local claude_token
+    claude_token="$(<"${claude_token_file}")"
+    exec_arguments+=(--remote-env "CLAUDE_CODE_OAUTH_TOKEN=${claude_token}")
+  fi
+
   local exit_code=0
 
-  devcontainer exec \
-    --workspace-folder "${repo_root}" \
-    --config "${agent_devcontainer_config}" \
-    --docker-path podman \
-    "${agent_tool}" ||
+  devcontainer exec "${exec_arguments[@]}" "${agent_tool}" ||
     exit_code=$?
 
   if ((exit_code != 0)); then

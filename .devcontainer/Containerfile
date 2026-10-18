@@ -100,8 +100,12 @@ ARG OPENCODE_SHA256=0f22479647226d1d2dd99595d20082ee7bda3870b62dc6a90b41efc1a71d
 
 ARG CLAUDE_CODE_VERSION=2.1.302
 
-RUN mkdir -p /home/${USERNAME}/.local/share/opencode \
-    && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.local/share/opencode
+RUN mkdir -p \
+        /home/${USERNAME}/.local/share/opencode \
+        /home/${USERNAME}/.claude \
+    && chown -R ${USERNAME}:${USERNAME} \
+        /home/${USERNAME}/.local/share/opencode \
+        /home/${USERNAME}/.claude
 
 RUN curl --fail --location --silent --show-error \
     "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz" \
