@@ -8,8 +8,6 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,readonly,relabel=shared",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "mounts": [
-    // Shared opencode login across workspaces
-    "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/developer/.local/share/opencode/auth.json,type=bind,relabel=shared",
     // Shared Claude Code login across workspaces
     "source=${localEnv:HOME}/.local/share/claude-agent,target=/home/developer/.claude,type=bind,relabel=shared",
     // Platform repositories are read-only
@@ -25,7 +23,8 @@
     "target=/workspaces/${localWorkspaceFolderBasename}/repos/local-environments/.local,type=tmpfs,notmpcopyup",
     // Agent-only state
     "target=/workspaces/${localWorkspaceFolderBasename}/.opencode,type=tmpfs,notmpcopyup,tmpfs-mode=1777",
-    "target=/workspaces/${localWorkspaceFolderBasename}/.claude,type=tmpfs,notmpcopyup,tmpfs-mode=1777"
+    "target=/workspaces/${localWorkspaceFolderBasename}/.claude,type=tmpfs,notmpcopyup,tmpfs-mode=1777",
+    "source=${localWorkspaceFolderBasename}-agent-opencode-data,target=/home/developer/.local/share/opencode,type=volume"
   ],
   "runArgs": [
     "--network=${localWorkspaceFolderBasename}-agent",

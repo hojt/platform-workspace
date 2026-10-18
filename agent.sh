@@ -26,6 +26,7 @@ baseline_protected_paths=(
 baseline_isolated_paths=(
   .opencode
   .claude
+  /home/developer/.local/share/opencode
 )
 
 # Defaults; .devcontainer/agent/sandbox.conf describes the actual layout.
@@ -115,6 +116,16 @@ host_path() {
     printf '%s/../%s' "${repo_root}" "${path#repos/}"
   else
     printf '%s/%s' "${repo_root}" "${path}"
+  fi
+}
+
+agent_path() {
+  local path="$1"
+
+  if [[ "${path}" == /* ]]; then
+    printf '%s' "${path}"
+  else
+    printf '%s/%s' "${agent_workspace}" "${path}"
   fi
 }
 
@@ -400,19 +411,19 @@ verify_agent_environment() {
   for path in \
     "${baseline_protected_paths[@]}" \
     "${agent_protected_paths[@]}"; do
-    check_agent_path_readonly "${agent_workspace}/${path}" "${path} is read-only" ||
+    check_agent_path_readonly "$(agent_path "${path}")" "${path} is read-only" ||
       status=1
   done
 
   for repo in "${workspace_repositories[@]}"; do
     for path in "repos/${repo}" "repos/${repo}/.git"; do
-      check_agent_path_readonly "${agent_workspace}/${path}" "${path} is read-only" ||
+      check_agent_path_readonly "$(agent_path "${path}")" "${path} is read-only" ||
         status=1
     done
   done
 
   for path in "${agent_writable_paths[@]}"; do
-    check_agent_path_writable "${agent_workspace}/${path}" "${path} is writable" ||
+    check_agent_path_writable "$(agent_path "${path}")" "${path} is writable" ||
       status=1
   done
 
@@ -420,21 +431,21 @@ verify_agent_environment() {
     "${baseline_isolated_paths[@]}" \
     "${agent_isolated_paths[@]}" \
     "${agent_hidden_paths[@]}"; do
-    check_agent_mountpoint "${agent_workspace}/${path}" "${path} is isolated" ||
+    check_agent_mountpoint "$(agent_path "${path}")" "${path} is isolated" ||
       status=1
   done
 
   for path in \
     "${baseline_isolated_paths[@]}" \
     "${agent_isolated_paths[@]}"; do
-    check_agent_path_writable "${agent_workspace}/${path}" "${path} is writable" ||
+    check_agent_path_writable "$(agent_path "${path}")" "${path} is writable" ||
       status=1
   done
 
   for path in "${agent_hidden_paths[@]}"; do
     # shellcheck disable=SC2016
     check_agent "${path} is hidden" \
-      sh -c '[ -z "$(ls -A "$1")" ]' _ "${agent_workspace}/${path}" ||
+      sh -c '[ -z "$(ls -A "$1")" ]' _ "$(agent_path "${path}")" ||
       status=1
   done
 
