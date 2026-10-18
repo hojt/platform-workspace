@@ -11,6 +11,37 @@ agent_egress_network="${repo_name}-agent-egress"
 agent_proxy="${repo_name}-agent-proxy"
 agent_proxy_dir="${repo_root}/.devcontainer/agent/proxy"
 
+baseline_protected_paths=(
+  .
+  .devcontainer
+  .git
+  AGENTS.md
+  CLAUDE.md
+  Taskfile.yml
+  agent.sh
+  dev.sh
+  opencode.json
+)
+
+baseline_isolated_paths=(
+  .opencode
+  .claude
+)
+
+# Defaults; .devcontainer/agent/sandbox.conf describes the actual layout.
+workspace_repositories=()
+agent_writable_paths=()
+agent_protected_paths=()
+agent_isolated_paths=()
+agent_hidden_paths=()
+
+agent_sandbox_config="${repo_root}/.devcontainer/agent/sandbox.conf"
+
+if [[ -f "${agent_sandbox_config}" ]]; then
+  # shellcheck source=.devcontainer/agent/sandbox.conf
+  source "${agent_sandbox_config}"
+fi
+
 mode="${1:-dev}"
 agent_tool="opencode"
 
@@ -49,6 +80,7 @@ parse_arguments() {
 }
 
 init_colors() {
+  # stdout has a TTY, so ANSI colors are safe to use.
   if [[ -t 1 ]]; then
     green=$'\033[32m'
     red=$'\033[31m'
@@ -73,6 +105,16 @@ check_command() {
     check_passed "${command_name}"
   else
     check_failed "${command_name}"
+  fi
+}
+
+host_path() {
+  local path="$1"
+
+  if [[ "${path}" == repos/* ]]; then
+    printf '%s/../%s' "${repo_root}" "${path#repos/}"
+  else
+    printf '%s/%s' "${repo_root}" "${path}"
   fi
 }
 
@@ -125,13 +167,22 @@ verify_host_environment() {
     ".devcontainer/agent/devcontainer.json" ||
     status=1
 
-  check_host_repository "${repo_root}/../homelab" "homelab repository" || status=1
-  check_host_repository "${repo_root}/../local-platform" "local-platform repository" || status=1
-  check_host_repository "${repo_root}/../local-environments" "local-environments repository" || status=1
+  check_file \
+    "${agent_sandbox_config}" \
+    ".devcontainer/agent/sandbox.conf" ||
+    status=1
+
+  local repo
+  for repo in "${workspace_repositories[@]}"; do
+    check_host_repository \
+      "${repo_root}/../${repo}" \
+      "${repo} repository" ||
+      status=1
+  done
 
   check_directory \
     "${HOME}/.local/share/claude-agent" \
-    "Claude code login directory" ||
+    "Claude Code login directory" ||
     status=1
 
   if ((status != 0)); then
@@ -286,14 +337,6 @@ verify_agent_environment() {
     return 1
   fi
 
-  local repo
-  for repo in homelab local-platform local-environments; do
-    check_agent_repository \
-      "${agent_workspace}/repos/${repo}" \
-      "${repo} repository is available" ||
-      status=1
-  done
-
   check_agent "direct internet access is blocked" \
     sh -c '! curl --noproxy "*" --silent --max-time 5 --output /dev/null https://example.com' ||
     status=1
@@ -345,63 +388,51 @@ verify_agent_environment() {
     sh -c '! env | cut -d= -f1 | grep -Eiq "token|secret|passw|api_?key|credential|auth"' ||
     status=1
 
-  local protected_path
-  for protected_path in \
-    . \
-    .devcontainer \
-    .git \
-    AGENTS.md \
-    CLAUDE.md \
-    Taskfile.yml \
-    agent.sh \
-    dev.sh \
-    opencode.json \
-    repos/homelab \
-    repos/homelab/.git \
-    repos/local-platform \
-    repos/local-platform/.git \
-    repos/local-environments \
-    repos/local-environments/.git; do
-    check_agent_path_readonly \
-      "${agent_workspace}/${protected_path}" \
-      "${protected_path} is read-only" ||
+  local repo
+  for repo in "${workspace_repositories[@]}"; do
+    check_agent_repository \
+      "${agent_workspace}/repos/${repo}" \
+      "${repo} repository is available" ||
       status=1
   done
 
-  local writable_path
-  # shellcheck disable=SC2043 # More writable paths may be added.
-  for writable_path in \
-    repos/homelab/docs; do
-    check_agent_path_writable \
-      "${agent_workspace}/${writable_path}" \
-      "${writable_path} is writable" ||
+  local path
+  for path in \
+    "${baseline_protected_paths[@]}" \
+    "${agent_protected_paths[@]}"; do
+    check_agent_path_readonly "${agent_workspace}/${path}" "${path} is read-only" ||
+      status=1
+  done
+
+  for repo in "${workspace_repositories[@]}"; do
+    for path in "repos/${repo}" "repos/${repo}/.git"; do
+      check_agent_path_readonly "${agent_workspace}/${path}" "${path} is read-only" ||
+        status=1
+    done
+  done
+
+  for path in "${agent_writable_paths[@]}"; do
+    check_agent_path_writable "${agent_workspace}/${path}" "${path} is writable" ||
+      status=1
+  done
+
+  for path in \
+    "${baseline_isolated_paths[@]}" \
+    "${agent_isolated_paths[@]}" \
+    "${agent_hidden_paths[@]}"; do
+    check_agent_mountpoint "${agent_workspace}/${path}" "${path} is isolated" ||
+      status=1
+  done
+
+  for path in "${agent_hidden_paths[@]}"; do
+    # shellcheck disable=SC2016
+    check_agent "${path} is hidden" \
+      sh -c '[ -z "$(ls -A "$1")" ]' _ "${agent_workspace}/${path}" ||
       status=1
   done
 
   check_agent_command_absent podman "podman is not installed" || status=1
   check_agent_cannot_escalate "privilege escalation is not possible" || status=1
-
-  local isolated_path
-  for isolated_path in \
-    .opencode \
-    .claude \
-    repos/local-platform/.local \
-    repos/local-environments/.local; do
-    check_agent_mountpoint \
-      "${agent_workspace}/${isolated_path}" \
-      "${isolated_path} is isolated" ||
-      status=1
-  done
-
-  local hidden_path
-  for hidden_path in \
-    repos/local-platform/.local \
-    repos/local-environments/.local; do
-    # shellcheck disable=SC2016
-    check_agent "${hidden_path} is hidden" \
-      sh -c '[ -z "$(ls -A "$1")" ]' _ "${agent_workspace}/${hidden_path}" ||
-      status=1
-  done
 
   check_agent "no new privileges" \
     grep -qE '^NoNewPrivs:[[:space:]]+1$' /proc/self/status || status=1
@@ -439,12 +470,15 @@ verify_agent_environment() {
 }
 
 ensure_mount_points() {
-  mkdir -p \
-    "${repo_root}/repos/homelab" \
-    "${repo_root}/repos/local-platform" \
-    "${repo_root}/repos/local-environments" \
-    "${repo_root}/../local-platform/.local" \
-    "${repo_root}/../local-environments/.local"
+  local repo path
+
+  for repo in "${workspace_repositories[@]}"; do
+    mkdir -p "${repo_root}/repos/${repo}"
+  done
+
+  for path in "${agent_hidden_paths[@]}"; do
+    mkdir -p "$(host_path "${path}")"
+  done
 }
 
 ensure_agent_network() {
@@ -599,9 +633,11 @@ agent_session_name() {
 }
 
 start_tmux_session() {
+  # Normalize the repository name for use as a tmux session name.
   local session_name
   session_name="$(agent_session_name "${agent_tool}")"
 
+  # This branch executes inside the repository-specific tmux session.
   if [[ "${AGENT_SH_INSIDE_SESSION:-}" == "1" ]]; then
     enter_devcontainer
   fi
@@ -619,6 +655,7 @@ start_tmux_session() {
     done
   fi
 
+  # Reuse an existing repository session during normal startup.
   if tmux has-session -t "=${session_name}" 2>/dev/null; then
     if [[ -n "${TMUX:-}" ]]; then
       exec tmux switch-client -t "=${session_name}"
@@ -627,6 +664,7 @@ start_tmux_session() {
     fi
   fi
 
+  # Start this script again as the first process in the new tmux session.
   local session_command
 
   printf -v session_command \
