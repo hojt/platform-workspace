@@ -131,7 +131,7 @@ verify_host_environment() {
 
   check_directory \
     "${HOME}/.local/share/claude-agent" \
-    "~/.local/share/claude-agent" ||
+    "Claude code login directory" ||
     status=1
 
   if ((status != 0)); then
@@ -369,6 +369,7 @@ verify_agent_environment() {
   done
 
   local writable_path
+  # shellcheck disable=SC2043 # More writable paths may be added.
   for writable_path in \
     repos/homelab/docs; do
     check_agent_path_writable \
@@ -396,6 +397,7 @@ verify_agent_environment() {
   for hidden_path in \
     repos/local-platform/.local \
     repos/local-environments/.local; do
+    # shellcheck disable=SC2016
     check_agent "${hidden_path} is hidden" \
       sh -c '[ -z "$(ls -A "$1")" ]' _ "${agent_workspace}/${hidden_path}" ||
       status=1
@@ -412,12 +414,15 @@ verify_agent_environment() {
   warn_agent "SELinux confinement is active" \
     sh -c 'grep -q ":container_t:" /proc/self/attr/current'
 
+  # shellcheck disable=SC2016
   check_agent "memory limit is set" \
     sh -c '[ "$(cat /sys/fs/cgroup/memory.max)" != max ]' || status=1
 
+  # shellcheck disable=SC2016
   check_agent "process limit is set" \
     sh -c '[ "$(cat /sys/fs/cgroup/pids.max)" != max ]' || status=1
 
+  # shellcheck disable=SC2016
   check_agent "only this workspace is mounted" \
     sh -c '[ "$(ls -A /workspaces)" = "$1" ]' _ "${repo_name}" || status=1
 
