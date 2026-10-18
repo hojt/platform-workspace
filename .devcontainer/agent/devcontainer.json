@@ -8,7 +8,10 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,readonly,relabel=shared",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "mounts": [
+    // Shared opencode login across workspaces
     "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/developer/.local/share/opencode/auth.json,type=bind,relabel=shared",
+    // Shared Claude Code login across workspaces
+    "source=${localEnv:HOME}/.local/share/claude-agent,target=/home/developer/.claude,type=bind,relabel=shared",
     // Platform repositories are read-only
     "source=${localWorkspaceFolder}/../homelab,target=/workspaces/${localWorkspaceFolderBasename}/repos/homelab,type=bind,readonly,relabel=shared",
     "source=${localWorkspaceFolder}/../local-platform,target=/workspaces/${localWorkspaceFolderBasename}/repos/local-platform,type=bind,readonly,relabel=shared",
@@ -19,7 +22,8 @@
     "target=/workspaces/${localWorkspaceFolderBasename}/repos/local-platform/.local,type=tmpfs,notmpcopyup",
     "target=/workspaces/${localWorkspaceFolderBasename}/repos/local-environments/.local,type=tmpfs,notmpcopyup",
     // Agent-only state
-    "target=/workspaces/${localWorkspaceFolderBasename}/.opencode,type=tmpfs,notmpcopyup"
+    "target=/workspaces/${localWorkspaceFolderBasename}/.opencode,type=tmpfs,notmpcopyup",
+    "target=/workspaces/${localWorkspaceFolderBasename}/.claude,type=tmpfs,notmpcopyup"
   ],
   "runArgs": [
     "--network=${localWorkspaceFolderBasename}-agent",
@@ -38,7 +42,11 @@
     "http_proxy": "http://${localWorkspaceFolderBasename}-agent-proxy:8888",
     "https_proxy": "http://${localWorkspaceFolderBasename}-agent-proxy:8888",
     "NO_PROXY": "localhost,127.0.0.1",
-    "no_proxy": "localhost,127.0.0.1"
+    "no_proxy": "localhost,127.0.0.1",
+    "CLAUDE_CONFIG_DIR": "/home/developer/.claude",
+    "DISABLE_AUTOUPDATER": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "ENABLE_CLAUDEAI_MCP_SERVERS": "false"
   },
   "updateRemoteUserUID": true
 }

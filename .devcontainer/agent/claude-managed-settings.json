@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": ["Bash", "Read", "Edit", "Write", "Glob", "Grep"],
+    "ask": ["Bash(rm:*)", "WebFetch"],
+    "deny": [
+      "Bash(npm publish:*)",
+      "Bash(./mvnw deploy:*)",
+      "Bash(mvn deploy:*)"
+    ]
+  },
+  "disableAllHooks": true
+}

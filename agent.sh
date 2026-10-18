@@ -12,6 +12,7 @@ agent_proxy="${repo_name}-agent-proxy"
 agent_proxy_dir="${repo_root}/.devcontainer/agent/proxy"
 
 mode="${1:-dev}"
+agent_tool="opencode"
 
 green=""
 red=""
@@ -19,7 +20,7 @@ yellow=""
 reset=""
 
 usage() {
-  printf 'Usage: %s [rebuild|shell|proxy-log]\n' "${0}"
+  printf 'Usage: %s [rebuild|shell|proxy-log|claude]\n' "${0}"
   printf '  PROXY_LOG_SINCE=<time>  limit proxy-log (e.g. -1h, today)\n'
 }
 
@@ -31,6 +32,9 @@ parse_arguments() {
 
   case "${mode}" in
   dev | rebuild | shell | proxy-log)
+    ;;
+  claude)
+    agent_tool="claude"
     ;;
   -h | --help)
     usage
@@ -83,7 +87,7 @@ check_file() {
   fi
 }
 
-check_directory() {
+check_host_repository() {
   local directory="$1"
   local description="$2"
 
@@ -91,6 +95,17 @@ check_directory() {
     check_passed "${description}"
   else
     check_failed "${description}"
+  fi
+}
+
+check_directory() {
+  local directory_path="$1"
+  local description="$2"
+
+  if [[ -d "${directory_path}" ]]; then
+    check_passed "${description}"
+  else
+    check_failed "${description} (create with: mkdir -m 700 -p ${directory_path})"
   fi
 }
 
@@ -110,9 +125,14 @@ verify_host_environment() {
     ".devcontainer/agent/devcontainer.json" ||
     status=1
 
-  check_directory "${repo_root}/../homelab" "homelab repository" || status=1
-  check_directory "${repo_root}/../local-platform" "local-platform repository" || status=1
-  check_directory "${repo_root}/../local-environments" "local-environments repository" || status=1
+  check_host_repository "${repo_root}/../homelab" "homelab repository" || status=1
+  check_host_repository "${repo_root}/../local-platform" "local-platform repository" || status=1
+  check_host_repository "${repo_root}/../local-environments" "local-environments repository" || status=1
+
+  check_directory \
+    "${HOME}/.local/share/claude-agent" \
+    "~/.local/share/claude-agent" ||
+    status=1
 
   if ((status != 0)); then
     echo >&2
@@ -331,6 +351,7 @@ verify_agent_environment() {
     .devcontainer \
     .git \
     AGENTS.md \
+    CLAUDE.md \
     Taskfile.yml \
     agent.sh \
     dev.sh \
@@ -362,6 +383,7 @@ verify_agent_environment() {
   local isolated_path
   for isolated_path in \
     .opencode \
+    .claude \
     repos/local-platform/.local \
     repos/local-environments/.local; do
     check_agent_mountpoint \
@@ -398,6 +420,10 @@ verify_agent_environment() {
 
   check_agent "only this workspace is mounted" \
     sh -c '[ "$(ls -A /workspaces)" = "$1" ]' _ "${repo_name}" || status=1
+
+  check_agent "Claude Code managed settings are in place" \
+    test -f /etc/claude-code/managed-settings.json ||
+    status=1
 
   if ((status != 0)); then
     echo >&2
@@ -543,32 +569,42 @@ enter_devcontainer() {
   fi
 
   echo
-
-  echo "Starting OpenCode in ${repo_name}"
+  echo "Starting ${agent_tool} in ${repo_name}"
   echo
 
   exec devcontainer exec \
     --workspace-folder "${repo_root}" \
     --config "${agent_devcontainer_config}" \
     --docker-path podman \
-    opencode
+    "${agent_tool}"; then
+    open_troubleshooting_shell \
+      "Failed to start ${agent_tool} in agent container"
+  fi
+}
+
+agent_session_name() {
+  printf '%s-agent-%s' "${repo_name}" "$1" | tr -c '[:alnum:]_-' '-'
 }
 
 start_tmux_session() {
   local session_name
-
-  session_name="$(printf '%s-agent' "${repo_name}" | tr -c '[:alnum:]_-' '-')"
+  session_name="$(agent_session_name "${agent_tool}")"
 
   if [[ "${AGENT_SH_INSIDE_SESSION:-}" == "1" ]]; then
     enter_devcontainer
   fi
 
-  if [[ "${mode}" == "rebuild" ]] &&
-    tmux has-session -t "=${session_name}" 2>/dev/null; then
-    printf 'Cannot rebuild while the agent session is active: %s\n' \
-      "${session_name}" >&2
-    echo "Exit the active agent session before running ./agent.sh rebuild." >&2
-    exit 1
+  # Rebuilding while agent is active would disrupt its agent session.
+  if [[ "${mode}" == "rebuild" ]]; then
+    local tool
+    for tool in opencode claude; do
+      if tmux has-session -t "=$(agent_session_name "${tool}")" 2>/dev/null; then
+        printf 'Cannot rebuild while an agent session is active: %s\n' \
+          "$(agent_session_name "${tool}")" >&2
+        echo "Exit the active agent session before running ./agent.sh rebuild." >&2
+        exit 1
+      fi
+    done
   fi
 
   if tmux has-session -t "=${session_name}" 2>/dev/null; then

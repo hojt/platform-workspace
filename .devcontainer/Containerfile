@@ -98,6 +98,8 @@ ARG OPENCODE_VERSION=1.18.34
 # Update together with OPENCODE_VERSION
 ARG OPENCODE_SHA256=0f22479647226d1d2dd99595d20082ee7bda3870b62dc6a90b41efc1a71d7e9a
 
+ARG CLAUDE_CODE_VERSION=2.1.302
+
 RUN mkdir -p /home/${USERNAME}/.local/share/opencode \
     && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.local/share/opencode
 
@@ -112,6 +114,23 @@ RUN curl --fail --location --silent --show-error \
     && install --mode=0755 /tmp/opencode /usr/local/bin/opencode \
     && rm /tmp/opencode.tar.gz /tmp/opencode \
     && opencode --version
+
+RUN dnf install -y \
+        nodejs24 \
+        nodejs24-npm \
+    && dnf clean all
+
+RUN ln --symbolic /usr/bin/node-24 /usr/local/bin/node \
+    && ln --symbolic /usr/bin/npm-24 /usr/local/bin/npm \
+    && ln --symbolic /usr/bin/npx-24 /usr/local/bin/npx \
+    && node --version \
+    && npm --version \
+    && npx --version
+
+RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+    && claude --version
+
+COPY .devcontainer/agent/claude-managed-settings.json /etc/claude-code/managed-settings.json
 
 USER ${USERNAME}
 
