@@ -572,14 +572,21 @@ enter_devcontainer() {
   echo "Starting ${agent_tool} in ${repo_name}"
   echo
 
-  exec devcontainer exec \
+  local exit_code=0
+
+  devcontainer exec \
     --workspace-folder "${repo_root}" \
     --config "${agent_devcontainer_config}" \
     --docker-path podman \
-    "${agent_tool}"; then
+    "${agent_tool}" ||
+    exit_code=$?
+
+  if ((exit_code != 0)); then
     open_troubleshooting_shell \
-      "Failed to start ${agent_tool} in agent container"
+      "${agent_tool} exited with code ${exit_code}"
   fi
+
+  exit "${exit_code}"
 }
 
 agent_session_name() {
