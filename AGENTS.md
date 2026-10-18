@@ -125,30 +125,46 @@ cluster.
 
 ### Agent containment
 
-The development environment is intentionally designed to contain the coding
-agent and limit its blast radius.
+The development environment is intentionally designed to contain the
+coding agent and limit its blast radius. The workspace-specific layout
+is described in `.devcontainer/agent/sandbox.conf`, and `agent.sh`
+verifies it, together with the containment properties below, before
+starting an agent or an agent shell. See ADR-0010 in `hojt/homelab` for
+the reasoning.
 
-Do not attempt to bypass, weaken, or escape this containment.
+Do not attempt to bypass, weaken, or escape this containment. When a
+restriction stands in the way of a task, suggest the change instead of
+working around it.
 
-The expected agent environment does not expose:
+The agent environment does not expose:
 
 - the host Podman socket
 - the host Kubernetes configuration
-- the host Git configuration
+- the host Git configuration or SSH agent
 - container-runtime connection environment variables
+- direct network access
 
-`agent.sh` verifies these containment expectations before starting OpenCode or
-an agent shell.
+What to expect inside the sandbox:
 
-Do not modify the workspace configuration to bypass these checks.
+- The workspace is read-only, except for the paths listed as writable in
+  `sandbox.conf`. Writing elsewhere fails with "Read-only file system".
+- `.git` is read-only. The human developer stages, commits, and pushes.
+- `.opencode/` and `.claude/` are agent-only tmpfs mounts. They hide the
+  `README.md` files that keep the directories in the repository, so
+  `git status` shows those files as deleted. They are not deleted, and
+  nothing needs to be done about it.
+- Paths listed as hidden in `sandbox.conf` appear empty on purpose.
+- Network access goes through an egress proxy with an allowlist. A
+  refused connection is intended, not a fault to fix.
 
-If you notice configuration or architectural issues that could unintentionally
-grant the agent broader access or capabilities than intended, point them out
-clearly so they can be reviewed by the human developer.
+If you notice configuration or architectural issues that could
+unintentionally grant the agent broader access or capabilities than
+intended, point them out clearly so they can be reviewed by the human
+developer.
 
-Do not add privileged host, container-runtime, Kubernetes-cluster, host-network,
-or similar access to the agent environment unless the human developer
-explicitly requests it for a concrete reason.
+Do not add privileged host, container-runtime, Kubernetes-cluster,
+host-network, or similar access to the agent environment unless the
+human developer explicitly requests it for a concrete reason.
 
 ## Cluster state and GitOps
 
