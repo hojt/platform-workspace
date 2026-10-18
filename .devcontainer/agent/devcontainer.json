@@ -9,16 +9,17 @@
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "mounts": [
     "source=${localEnv:HOME}/.local/share/opencode/auth.json,target=/home/developer/.local/share/opencode/auth.json,type=bind,relabel=shared",
-    // The workspace is read-only; explicitly state what is writable
-    "source=${localWorkspaceFolder}/components,target=/workspaces/${localWorkspaceFolderBasename}/components,type=bind",
-    "source=${localWorkspaceFolder}/docs,target=/workspaces/${localWorkspaceFolderBasename}/docs,type=bind",
+    // Platform repositories are read-only
+    "source=${localWorkspaceFolder}/../homelab,target=/workspaces/${localWorkspaceFolderBasename}/repos/homelab,type=bind,readonly,relabel=shared",
+    "source=${localWorkspaceFolder}/../local-platform,target=/workspaces/${localWorkspaceFolderBasename}/repos/local-platform,type=bind,readonly,relabel=shared",
+    "source=${localWorkspaceFolder}/../local-environments,target=/workspaces/${localWorkspaceFolderBasename}/repos/local-environments,type=bind,readonly,relabel=shared",
+    // Explicitly writable
+    "source=${localWorkspaceFolder}/../homelab/docs,target=/workspaces/${localWorkspaceFolderBasename}/repos/homelab/docs,type=bind",
+    // Hidden from the agent
+    "target=/workspaces/${localWorkspaceFolderBasename}/repos/local-platform/.local,type=tmpfs,notmpcopyup",
+    "target=/workspaces/${localWorkspaceFolderBasename}/repos/local-environments/.local,type=tmpfs,notmpcopyup",
     // Agent-only state
-    "target=/workspaces/${localWorkspaceFolderBasename}/.opencode,type=tmpfs",
-    "source=${localWorkspaceFolderBasename}-agent-maven-cache,target=/home/developer/.m2,type=volume",
-    "source=${localWorkspaceFolderBasename}-agent-npm-cache,target=/home/developer/.npm,type=volume",
-    "source=${localWorkspaceFolderBasename}-agent-frontend-node-modules,target=/workspaces/${localWorkspaceFolderBasename}/components/example-frontend/node_modules,type=volume",
-    "source=${localWorkspaceFolderBasename}-agent-frontend-dist,target=/workspaces/${localWorkspaceFolderBasename}/components/example-frontend/dist,type=volume",
-    "source=${localWorkspaceFolderBasename}-agent-backend-target,target=/workspaces/${localWorkspaceFolderBasename}/components/example-backend/target,type=volume"
+    "target=/workspaces/${localWorkspaceFolderBasename}/.opencode,type=tmpfs,notmpcopyup"
   ],
   "runArgs": [
     "--network=${localWorkspaceFolderBasename}-agent",
@@ -37,10 +38,7 @@
     "http_proxy": "http://${localWorkspaceFolderBasename}-agent-proxy:8888",
     "https_proxy": "http://${localWorkspaceFolderBasename}-agent-proxy:8888",
     "NO_PROXY": "localhost,127.0.0.1",
-    "no_proxy": "localhost,127.0.0.1",
-    "NODE_USE_ENV_PROXY": "1",
-    "AGENT_PROXY_HOST": "${localWorkspaceFolderBasename}-agent-proxy",
-    "MAVEN_ARGS": "--global-settings /workspaces/${localWorkspaceFolderBasename}/.devcontainer/agent/maven-settings.xml -Dmaven.clean.failOnError=false"
+    "no_proxy": "localhost,127.0.0.1"
   },
   "updateRemoteUserUID": true
 }

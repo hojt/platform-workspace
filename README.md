@@ -106,7 +106,7 @@ Both the developer and coding-agent environments present the same repository
 layout:
 
 ```text
-/workspace/
+/workspaces/platform-workspace/
 ├── README.md
 ├── AGENTS.md
 ├── dev.sh
@@ -117,8 +117,8 @@ layout:
     └── local-environments/
 ```
 
-`/workspace` is the `platform-workspace` repository itself. The three
-repositories under `/workspace/repos/` are bind mounts of the sibling
+`/workspaces/platform-workspace/` is the `platform-workspace` repository itself. The three
+repositories under `/workspaces/platform-workspace/repos/` are bind mounts of the sibling
 repositories on the host.
 
 Each mounted repository retains its own independent Git state and history.
@@ -178,27 +178,43 @@ Open a diagnostic shell in the coding-agent environment with:
 ./agent.sh shell
 ```
 
-The coding-agent environment has read/write access to the workspace repositories
-but intentionally does not receive the privileged host capabilities available
-to the developer environment.
+The coding-agent environment is contained by default. It can read the
+workspace and all three platform repositories, but it can change only
+what is explicitly made writable:
 
-In particular, the agent environment is expected not to expose:
+- the workspace and the platform repositories are mounted read-only,
+  including their Git metadata and host scripts;
+- `repos/homelab/docs/` is writable, so that the agent can help with
+  documentation;
+- the `.local/` directories of `local-platform` and `local-environments`
+  are hidden behind empty mounts, so that local key material never
+  reaches the agent.
+
+The agent environment does not receive the privileged host capabilities
+available to the developer environment. In particular, it does not have:
 
 - the host Podman socket
 - the host Kubernetes configuration
-- the host Git configuration
+- the host Git configuration or SSH agent
 - container-runtime connection environment variables
+- direct network access
 
-`agent.sh` verifies both the expected repository mounts and these containment
-properties before starting OpenCode or an agent shell.
+All outbound traffic goes through an egress proxy that only allows the
+hosts listed in `.devcontainer/agent/proxy/allowlist`. Show which hosts
+the agent has reached or been refused with:
 
-Platform tools such as `kubectl`, `kind`, or `podman` may still exist as
-binaries inside the image. Containment is based on withholding the credentials,
-sockets, networking, and other capability channels that would grant access to
-the host or live cluster.
+    ./agent.sh proxy-log
 
-This still allows useful local validation such as manifest rendering without
-granting the coding agent control over the local platform.
+`agent.sh` verifies the repository mounts and every containment property
+above before starting OpenCode or an agent shell, and refuses to start if
+any of them does not hold.
+
+`kubectl` and `kind` exist in the image for local validation such as
+manifest rendering. Without credentials or network access to the
+cluster, they cannot be used to operate the local platform.
+
+See ADR-0010 in `hojt/homelab` for the trust model behind these
+choices.
 
 ## Git
 

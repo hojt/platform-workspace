@@ -7,11 +7,10 @@
   },
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind",
-  "containerEnv": {
-    "CONTAINER_HOST": "unix:///run/podman/podman.sock",
-    "DOCKER_HOST": "unix:///run/podman/podman.sock"
-  },
   "mounts": [
+    "source=${localWorkspaceFolder}/../homelab,target=/workspaces/${localWorkspaceFolderBasename}/repos/homelab,type=bind",
+    "source=${localWorkspaceFolder}/../local-platform,target=/workspaces/${localWorkspaceFolderBasename}/repos/local-platform,type=bind",
+    "source=${localWorkspaceFolder}/../local-environments,target=/workspaces/${localWorkspaceFolderBasename}/repos/local-environments,type=bind",
     "source=${localEnv:XDG_RUNTIME_DIR}/podman/podman.sock,target=/run/podman/podman.sock,type=bind",
     "source=${localEnv:HOME}/.kube,target=/home/developer/.kube,type=bind",
     "source=${localEnv:HOME}/.config/nvim,target=/home/developer/.config/nvim,type=bind",
@@ -19,11 +18,12 @@
     "source=${localWorkspaceFolderBasename}-nvim-data,target=/home/developer/.local/share/nvim,type=volume"
   ],
   "runArgs": [
-    "--security-opt=label=disable",
-    "--publish=127.0.0.1::5173"
+    "--network=host",
+    "--security-opt=label=disable"
   ],
   "containerEnv": {
     "CONTAINER_HOST": "unix:///run/podman/podman.sock",
+    "DOCKER_HOST": "unix:///run/podman/podman.sock",
     "KIND_EXPERIMENTAL_PROVIDER": "podman"
   },
   "remoteUser": "developer",

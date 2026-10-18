@@ -266,12 +266,20 @@ verify_agent_environment() {
     return 1
   fi
 
+  local repo
+  for repo in homelab local-platform local-environments; do
+    check_agent_repository \
+      "${agent_workspace}/repos/${repo}" \
+      "${repo} repository is available" ||
+      status=1
+  done
+
   check_agent "direct internet access is blocked" \
     sh -c '! curl --noproxy "*" --silent --max-time 5 --output /dev/null https://example.com' ||
     status=1
 
   check_agent "egress proxy is reachable" \
-    curl --silent --max-time 10 --output /dev/null https://registry.npmjs.org ||
+    curl --silent --max-time 10 --output /dev/null https://models.opencode.ai ||
     status=1
 
   check_agent "hosts outside the allowlist are denied" \
@@ -327,7 +335,12 @@ verify_agent_environment() {
     agent.sh \
     dev.sh \
     opencode.json \
-    scripts; do
+    repos/homelab \
+    repos/homelab/.git \
+    repos/local-platform \
+    repos/local-platform/.git \
+    repos/local-environments \
+    repos/local-environments/.git; do
     check_agent_path_readonly \
       "${agent_workspace}/${protected_path}" \
       "${protected_path} is read-only" ||
@@ -336,8 +349,7 @@ verify_agent_environment() {
 
   local writable_path
   for writable_path in \
-    components \
-    docs; do
+    repos/homelab/docs; do
     check_agent_path_writable \
       "${agent_workspace}/${writable_path}" \
       "${writable_path} is writable" ||
@@ -350,12 +362,20 @@ verify_agent_environment() {
   local isolated_path
   for isolated_path in \
     .opencode \
-    components/example-frontend/node_modules \
-    components/example-frontend/dist \
-    components/example-backend/target; do
+    repos/local-platform/.local \
+    repos/local-environments/.local; do
     check_agent_mountpoint \
       "${agent_workspace}/${isolated_path}" \
       "${isolated_path} is isolated" ||
+      status=1
+  done
+
+  local hidden_path
+  for hidden_path in \
+    repos/local-platform/.local \
+    repos/local-environments/.local; do
+    check_agent "${hidden_path} is hidden" \
+      sh -c '[ -z "$(ls -A "$1")" ]' _ "${agent_workspace}/${hidden_path}" ||
       status=1
   done
 
@@ -385,6 +405,15 @@ verify_agent_environment() {
   fi
 
   return "${status}"
+}
+
+ensure_mount_points() {
+  mkdir -p \
+    "${repo_root}/repos/homelab" \
+    "${repo_root}/repos/local-platform" \
+    "${repo_root}/repos/local-environments" \
+    "${repo_root}/../local-platform/.local" \
+    "${repo_root}/../local-environments/.local"
 }
 
 ensure_agent_network() {
@@ -499,6 +528,7 @@ enter_devcontainer() {
     echo "Starting agent container"
   fi
 
+  ensure_mount_points
   ensure_agent_network
   start_agent_proxy
 

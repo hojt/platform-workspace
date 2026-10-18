@@ -4,8 +4,11 @@ ARG BASE_IMAGE=registry.fedoraproject.org/fedora:43@sha256:c45b30a84cf2fb151e3d8
 FROM ${BASE_IMAGE} AS base
 
 ARG KIND_VERSION=0.32.0
+# Update together with KIND_VERSION (kind-linux-amd64.sha256sum in the release)
+ARG KIND_SHA256=50030de23cf40a18505f20426f6a8506bedf13c6e509244bd1fa9463721b0f54
 ARG KUBECTL_VERSION=1.35.0
-
+# Update together with KUBECTL_VERSION (kubectl.sha256 next to the binary)
+ARG KUBECTL_SHA256=a2e984a18a0c063279d692533031c1eff93a262afcc0afdc517375432d060989
 ARG TASK_VERSION=3.54.0
 # Update together with TASK_VERSION (from task_checksums.txt in the release)
 ARG TASK_SHA256=680859dbb4d881a9c72d4d9a8f510825450849af8567deacd7302c01124416fb
@@ -43,7 +46,6 @@ RUN dnf install -y \
         fzf \
         git \
         neovim \
-        podman \
         procps-ng \
         ripgrep \
         shellcheck \
@@ -69,6 +71,7 @@ RUN curl --fail --location --silent --show-error \
 RUN curl --fail --location --silent --show-error \
         "https://kind.sigs.k8s.io/dl/v${KIND_VERSION}/kind-linux-amd64" \
         --output /usr/local/bin/kind \
+    && echo "${KIND_SHA256}  /usr/local/bin/kind" | sha256sum --check --strict \
     && chmod +x /usr/local/bin/kind \
     && kind version
 
@@ -76,6 +79,7 @@ RUN curl --fail --location --silent --show-error \
 RUN curl --fail --location --silent --show-error \
         "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
         --output /usr/local/bin/kubectl \
+    && echo "${KUBECTL_SHA256}  /usr/local/bin/kubectl" | sha256sum --check --strict \
     && chmod +x /usr/local/bin/kubectl \
     && kubectl version --client
 

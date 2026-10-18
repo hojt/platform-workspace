@@ -177,20 +177,6 @@ open_existing_devcontainer_shell() {
   fi
 }
 
-show_published_ports() {
-  local container_id
-  container_id="$(podman ps \
-    --filter "label=devcontainer.local_folder=${repo_root}" \
-    --filter "label=devcontainer.config_file=${repo_root}/.devcontainer/devcontainer.json" \
-    --format '{{.ID}}')"
-
-  if [[ -n "${container_id}" ]]; then
-    echo
-    echo "Published ports:"
-    podman port "${container_id}" | sed 's/^/  /'
-  fi
-}
-
 enter_devcontainer() {
   local -a up_arguments=(
     --workspace-folder "${repo_root}"
@@ -210,8 +196,6 @@ enter_devcontainer() {
     open_troubleshooting_shell \
       "Failed to start development container"
   fi
-
-  show_published_ports
 
   echo
   echo "Entering ${repo_name}"
