@@ -27,6 +27,7 @@
   ],
   "runArgs": [
     "--network=${localWorkspaceFolderBasename}-agent",
+    "--label=homelab.agent-workspace=${localWorkspaceFolderBasename}",
     "--cap-drop=ALL",
     "--security-opt=no-new-privileges",
     "--memory=16g",

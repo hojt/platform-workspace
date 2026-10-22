@@ -573,6 +573,13 @@ show_proxy_log() {
   }
 }
 
+agent_container_id() {
+  podman ps \
+    --filter "label=homelab.agent-workspace=${repo_name}" \
+    --format '{{.ID}}' |
+    head -n 1
+}
+
 fetch_agent_branches() {
   if [[ "${agent_workspace_mode}" != "clone" ]]; then
     echo "fetch requires agent_workspace_mode=clone in sandbox.conf" >&2
@@ -584,16 +591,25 @@ fetch_agent_branches() {
   # shellcheck disable=SC2064
   trap "rm -f '${bundle}'" RETURN
 
+  local container_id
+  container_id="$(agent_container_id)"
+
+  if [[ -z "${container_id}" ]]; then
+    echo "The agent container is not running. Start it from the host with ./agent.sh." >&2
+    exit 1
+  fi
+
   # The bundle is created inside the agent container and only read as data
-  # on the host. The host never runs Git inside the delivery repository.
+  # here. Git never runs inside the delivery repository outside the agent
+  # container.
   # shellcheck disable=SC2016
-  if ! agent_exec sh -euc '
+  if ! podman exec --user developer "${container_id}" sh -euc '
     cd "$1"
     if [ -n "$(git for-each-ref --format=x refs/heads/agent/)" ]; then
       git bundle create --quiet - --branches="agent/*" | base64
     fi
   ' _ "${agent_delivery}" | base64 --decode >"${bundle}"; then
-    echo "Could not read agent branches. Start the agent container with ./agent.sh." >&2
+    echo "Could not read agent branches from the agent container." >&2
     exit 1
   fi
 
@@ -788,7 +804,22 @@ start_tmux_session() {
   fi
 }
 
+in_container() {
+  [[ -f /run/.containerenv ]]
+}
+
 parse_arguments "$@"
+
+if in_container; then
+  case "${mode}" in
+  fetch)
+    ;;
+  *)
+    printf './agent.sh %s runs on the host. From a container, only ./agent.sh fetch is available.\n' "${mode}" >&2
+    exit 2
+    ;;
+  esac
+fi
 
 if [[ "${mode}" == "proxy-log" ]]; then
   show_proxy_log
