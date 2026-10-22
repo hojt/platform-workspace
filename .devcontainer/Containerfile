@@ -101,10 +101,6 @@ RUN mkdir -p \
         /home/${USERNAME}/.local/share/opencode \
         /home/${USERNAME}/.claude
 
-COPY .devcontainer/agent/tools/package.json \
-     .devcontainer/agent/tools/package-lock.json \
-     /opt/agent-tools/
-
 RUN dnf install -y \
         nodejs24 \
         nodejs24-npm \
@@ -116,6 +112,10 @@ RUN ln --symbolic /usr/bin/node-24 /usr/local/bin/node \
     && node --version \
     && npm --version \
     && npx --version
+
+COPY .devcontainer/agent/tools/package.json \
+     .devcontainer/agent/tools/package-lock.json \
+     /opt/agent-tools/
 
 RUN npm ci --prefix /opt/agent-tools \
     && ln --symbolic /opt/agent-tools/node_modules/.bin/claude /usr/local/bin/claude \
