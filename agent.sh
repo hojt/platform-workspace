@@ -4,12 +4,12 @@ set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_name="$(basename -- "${repo_root}")"
-agent_workspace="/workspaces/${repo_name}"
 agent_devcontainer_config="${repo_root}/.devcontainer/agent/devcontainer.json"
 agent_network="${repo_name}-agent"
 agent_egress_network="${repo_name}-agent-egress"
 agent_proxy="${repo_name}-agent-proxy"
 agent_proxy_dir="${repo_root}/.devcontainer/agent/proxy"
+agent_workspace_mode="mount"
 claude_token_file="${XDG_CONFIG_HOME:-${HOME}/.config}/claude-agent/oauth-token"
 
 baseline_protected_paths=(
@@ -45,6 +45,13 @@ if [[ -f "${agent_sandbox_config}" ]]; then
   source "${agent_sandbox_config}"
 fi
 
+agent_workspace="/workspaces/${repo_name}"
+if [[ "${agent_workspace_mode}" == "clone" ]]; then
+  agent_workspace="/agent-workspaces/${repo_name}"
+fi
+agent_upstream="/upstream/${repo_name}.git"
+agent_delivery="/agent-delivery/${repo_name}.git"
+
 mode="${1:-dev}"
 agent_tool="opencode"
 
@@ -54,7 +61,7 @@ yellow=""
 reset=""
 
 usage() {
-  printf 'Usage: %s [rebuild|shell|proxy-log|claude]\n' "${0}"
+  printf 'Usage: %s [rebuild|shell|fetch|proxy-log|claude]\n' "${0}"
   printf '  PROXY_LOG_SINCE=<time>  limit proxy-log (e.g. -1h, today)\n'
 }
 
@@ -65,7 +72,7 @@ parse_arguments() {
   fi
 
   case "${mode}" in
-  dev | rebuild | shell | proxy-log)
+  dev | rebuild | shell | fetch | proxy-log)
     ;;
   claude)
     agent_tool="claude"
@@ -205,124 +212,84 @@ agent_exec() {
     "$@"
 }
 
-check_agent_repository() {
-  local directory="$1"
+agent_checks=()
+
+queue_check() {
+  local kind="$1"
   local description="$2"
+  shift 2
 
-  if agent_exec test -d "${directory}/.git"; then
-    check_passed "${description}"
-  else
-    check_failed "${description}"
-  fi
-}
+  local line arg
+  printf -v line '%q %q' "${kind}" "${description}"
+  for arg in "$@"; do
+    printf -v line '%s %q' "${line}" "${arg}"
+  done
 
-check_agent_path_absent() {
-  local path="$1"
-  local description="$2"
-
-  if agent_exec test ! -e "${path}"; then
-    check_passed "${description}"
-  else
-    check_failed "${description}"
-  fi
-}
-
-check_agent_socket_absent() {
-  local path="$1"
-  local description="$2"
-
-  if agent_exec test ! -S "${path}"; then
-    check_passed "${description}"
-  else
-    check_failed "${description}"
-  fi
-}
-
-check_agent_env_absent() {
-  local variable="$1"
-  local description="$2"
-
-  if ! agent_exec printenv "${variable}" >/dev/null 2>&1; then
-    check_passed "${description}"
-  else
-    check_failed "${description}"
-  fi
-}
-
-check_agent_path_readonly() {
-  local path="$1"
-  local description="$2"
-
-  if agent_exec test ! -w "${path}"; then
-    check_passed "${description}"
-  else
-    check_failed "${description}"
-  fi
-}
-
-check_agent_path_writable() {
-  local path="$1"
-  local description="$2"
-
-  if agent_exec test -w "${path}"; then
-    check_passed "${description}"
-  else
-    check_failed "${description}"
-  fi
-}
-
-check_agent_mountpoint() {
-  local path="$1"
-  local description="$2"
-
-  if agent_exec mountpoint -q "${path}"; then
-    check_passed "${description}"
-  else
-    check_failed "${description}"
-  fi
-}
-
-check_agent_command_absent() {
-  local command_name="$1"
-  local description="$2"
-
-  if ! agent_exec sh -c "command -v ${command_name}" >/dev/null 2>&1; then
-    check_passed "${description}"
-  else
-    check_failed "${description}"
-  fi
-}
-
-check_agent_cannot_escalate() {
-  local description="$1"
-
-  if ! agent_exec sudo -n true >/dev/null 2>&1; then
-    check_passed "${description}"
-  else
-    check_failed "${description}"
-  fi
+  agent_checks+=("${line}")
 }
 
 check_agent() {
-  local description="$1"
-  shift
-
-  if agent_exec "$@" >/dev/null 2>&1; then
-    check_passed "${description}"
-  else
-    check_failed "${description}"
-  fi
+  queue_check check "$@"
 }
 
 warn_agent() {
-  local description="$1"
-  shift
+  queue_check warn "$@"
+}
 
-  if agent_exec "$@" >/dev/null 2>&1; then
-    check_passed "${description}"
-  else
-    printf '  %s!%s %s\n' "${yellow}" "${reset}" "${description}" >&2
+check_agent_repository() { check_agent "$2" test -d "$1/.git"; }
+# shellcheck disable=SC2016
+check_agent_path_readonly() { check_agent "$2" sh -c '! test -w "$1"' _ "$1"; }
+check_agent_path_writable() { check_agent "$2" test -w "$1"; }
+# shellcheck disable=SC2016
+check_agent_path_absent() { check_agent "$2" sh -c '! test -e "$1"' _ "$1"; }
+# shellcheck disable=SC2016
+check_agent_socket_absent() { check_agent "$2" sh -c '! test -S "$1"' _ "$1"; }
+check_agent_mountpoint() { check_agent "$2" mountpoint -q "$1"; }
+# shellcheck disable=SC2016
+check_agent_env_absent() { check_agent "$2" sh -c '! printenv "$1"' _ "$1"; }
+# shellcheck disable=SC2016
+check_agent_command_absent() { check_agent "$2" sh -c '! command -v "$1"' _ "$1"; }
+check_agent_cannot_escalate() { check_agent "$1" sh -c '! sudo -n true'; }
+
+run_agent_checks() {
+  local expected="${#agent_checks[@]}"
+  local received=0
+  local status=0
+  local script results outcome description
+
+  # shellcheck disable=SC2016
+  script='
+check() {
+  d="$1"; shift
+  if "$@" >/dev/null 2>&1; then printf "pass\t%s\n" "$d"; else printf "fail\t%s\n" "$d"; fi
+}
+warn() {
+  d="$1"; shift
+  if "$@" >/dev/null 2>&1; then printf "pass\t%s\n" "$d"; else printf "warn\t%s\n" "$d"; fi
+}
+'
+  script+="$(printf '%s\n' "${agent_checks[@]}")"
+  agent_checks=()
+
+  results="$(agent_exec bash -c "${script}")" || true
+
+  while IFS=$'\t' read -r outcome description; do
+    [[ -z "${outcome}" ]] && continue
+    received=$((received + 1))
+
+    case "${outcome}" in
+    pass) check_passed "${description}" ;;
+    warn) printf '  %s!%s %s\n' "${yellow}" "${reset}" "${description}" >&2 ;;
+    *) check_failed "${description}" || status=1 ;;
+    esac
+  done <<<"${results}"
+
+  if ((received != expected)); then
+    check_failed "all ${expected} checks reported, got ${received}" || true
+    status=1
   fi
+
+  return "${status}"
 }
 
 verify_agent_environment() {
@@ -333,13 +300,10 @@ verify_agent_environment() {
 
   init_colors
 
-  if ! check_agent_repository \
+  check_agent_repository \
     "${agent_workspace}" \
-    "${repo_name} repository is available"; then
-    echo >&2
-    echo "Cannot verify the agent environment." >&2
-    return 1
-  fi
+    "${repo_name} repository is available" ||
+    status=1
 
   check_agent "direct internet access is blocked" \
     sh -c '! curl --noproxy "*" --silent --max-time 5 --output /dev/null https://example.com' ||
@@ -401,24 +365,40 @@ verify_agent_environment() {
   done
 
   local path
-  for path in \
-    "${baseline_protected_paths[@]}" \
-    "${agent_protected_paths[@]}"; do
-    check_agent_path_readonly "$(agent_path "${path}")" "${path} is read-only" ||
-      status=1
-  done
 
-  for repo in "${workspace_repositories[@]}"; do
-    for path in "repos/${repo}" "repos/${repo}/.git"; do
+  if [[ "${agent_workspace_mode}" == "clone" ]]; then
+    check_agent_mountpoint "${agent_workspace}" "workspace is an agent-owned clone" ||
+      status=1
+    check_agent_path_writable "${agent_workspace}" "workspace is writable" ||
+      status=1
+    check_agent_path_readonly "${agent_upstream}" "upstream repository is read-only" ||
+      status=1
+    check_agent_path_absent "/workspaces/${repo_name}" "developer working tree is not mounted" ||
+      status=1
+    check_agent_mountpoint "${agent_delivery}" "delivery repository is isolated" ||
+      status=1
+    check_agent_path_writable "${agent_delivery}" "delivery repository is writable" ||
+      status=1
+  else
+    for path in \
+      "${baseline_protected_paths[@]}" \
+      "${agent_protected_paths[@]}"; do
       check_agent_path_readonly "$(agent_path "${path}")" "${path} is read-only" ||
         status=1
     done
-  done
 
-  for path in "${agent_writable_paths[@]}"; do
-    check_agent_path_writable "$(agent_path "${path}")" "${path} is writable" ||
-      status=1
-  done
+    for repo in "${workspace_repositories[@]}"; do
+      for path in "repos/${repo}" "repos/${repo}/.git"; do
+        check_agent_path_readonly "$(agent_path "${path}")" "${path} is read-only" ||
+          status=1
+      done
+    done
+
+    for path in "${agent_writable_paths[@]}"; do
+      check_agent_path_writable "$(agent_path "${path}")" "${path} is writable" ||
+        status=1
+    done
+  fi
 
   for path in \
     "${baseline_isolated_paths[@]}" \
@@ -466,11 +446,14 @@ verify_agent_environment() {
 
   # shellcheck disable=SC2016
   check_agent "only this workspace is mounted" \
-    sh -c '[ "$(ls -A /workspaces)" = "$1" ]' _ "${repo_name}" || status=1
+    sh -c '[ "$(ls -A "$(dirname "$1")")" = "$(basename "$1")" ]' _ "${agent_workspace}" ||
+    status=1
 
   check_agent "Claude Code managed settings are in place" \
     test -f /etc/claude-code/managed-settings.json ||
     status=1
+
+  run_agent_checks || status=1
 
   if ((status != 0)); then
     echo >&2
@@ -590,6 +573,98 @@ show_proxy_log() {
   }
 }
 
+fetch_agent_branches() {
+  if [[ "${agent_workspace_mode}" != "clone" ]]; then
+    echo "fetch requires agent_workspace_mode=clone in sandbox.conf" >&2
+    exit 1
+  fi
+
+  local bundle
+  bundle="$(mktemp --suffix=.bundle)"
+  # shellcheck disable=SC2064
+  trap "rm -f '${bundle}'" RETURN
+
+  # The bundle is created inside the agent container and only read as data
+  # on the host. The host never runs Git inside the delivery repository.
+  # shellcheck disable=SC2016
+  if ! agent_exec sh -euc '
+    cd "$1"
+    if [ -n "$(git for-each-ref --format=x refs/heads/agent/)" ]; then
+      git bundle create --quiet - --branches="agent/*" | base64
+    fi
+  ' _ "${agent_delivery}" | base64 --decode >"${bundle}"; then
+    echo "Could not read agent branches. Start the agent container with ./agent.sh." >&2
+    exit 1
+  fi
+
+  if [[ -s "${bundle}" ]]; then
+    git -C "${repo_root}" fetch --prune --no-tags \
+      "${bundle}" '+refs/heads/agent/*:refs/remotes/agent/*'
+  else
+    # No agent branches are delivered; drop any previously fetched ones.
+    git -C "${repo_root}" for-each-ref \
+      --format='delete %(refname)' refs/remotes/agent/ |
+      git -C "${repo_root}" update-ref --stdin
+  fi
+
+  echo
+  echo "Agent branches:"
+  git -C "${repo_root}" for-each-ref refs/remotes/agent \
+    --format='  %(refname:short)  %(committerdate:relative)  %(subject)'
+}
+
+prepare_agent_clone() {
+  echo
+  echo "Preparing agent clone of ${repo_name}"
+
+  # shellcheck disable=SC2016
+  agent_exec sh -euc '
+    workspace="$1"
+    upstream="$2"
+    delivery="$3"
+    repo="$4"
+    cd "${workspace}"
+
+    if [ ! -d .git ]; then
+      git init --quiet
+      git remote add origin "file://${upstream}"
+    fi
+
+    git fetch --quiet origin
+    git remote set-head origin --auto >/dev/null
+
+    default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD)"
+    local_branch="${default_branch#origin/}"
+
+    if ! git rev-parse --quiet --verify HEAD >/dev/null; then
+      git checkout --quiet --force -B "${local_branch}" "${default_branch}"
+    elif [ "$(git symbolic-ref --quiet --short HEAD)" = "${local_branch}" ] &&
+      [ -z "$(git status --porcelain)" ]; then
+      git merge --quiet --ff-only "${default_branch}" ||
+        echo "Agent clone: ${local_branch} could not be fast-forwarded" >&2
+    fi
+
+    for readme in .opencode/README.md .claude/README.md; do
+      if git ls-files --error-unmatch "${readme}" >/dev/null 2>&1; then
+        git update-index --skip-worktree "${readme}"
+      fi
+    done
+
+    if [ ! -f "${delivery}/HEAD" ]; then
+      git init --bare --quiet "${delivery}"
+    fi
+
+    if ! git remote get-url delivery >/dev/null 2>&1; then
+      git remote add delivery "file://${delivery}"
+    fi
+
+    git config remote.pushDefault delivery
+    git config push.default current
+    git config user.name "Coding agent"
+    git config user.email "coding-agent@${repo}.invalid"
+  ' _ "${agent_workspace}" "${agent_upstream}" "${agent_delivery}" "${repo_name}"
+}
+
 enter_devcontainer() {
   local -a up_arguments=(
     --workspace-folder "${repo_root}"
@@ -611,6 +686,12 @@ enter_devcontainer() {
   if ! devcontainer up "${up_arguments[@]}"; then
     open_troubleshooting_shell \
       "Failed to start agent container"
+  fi
+
+  if [[ "${agent_workspace_mode}" == "clone" ]] &&
+    ! prepare_agent_clone; then
+    open_troubleshooting_shell \
+      "Failed to prepare agent clone"
   fi
 
   if ! verify_agent_environment; then
@@ -711,6 +792,11 @@ parse_arguments "$@"
 
 if [[ "${mode}" == "proxy-log" ]]; then
   show_proxy_log
+  exit 0
+fi
+
+if [[ "${mode}" == "fetch" ]]; then
+  fetch_agent_branches
   exit 0
 fi
 
