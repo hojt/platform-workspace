@@ -10,6 +10,10 @@ agent_egress_network="${repo_name}-agent-egress"
 agent_proxy="${repo_name}-agent-proxy"
 agent_proxy_dir="${repo_root}/.devcontainer/agent/proxy"
 agent_workspace_mode="mount"
+agent_forge="local"
+agent_forge_repository=""
+github_app_config="${XDG_CONFIG_HOME:-${HOME}/.config}/agent-github/app.conf"
+github_token_dir="${XDG_RUNTIME_DIR:-/tmp}/agent-github/${repo_name}"
 claude_token_file="${XDG_CONFIG_HOME:-${HOME}/.config}/claude-agent/oauth-token"
 
 baseline_protected_paths=(
@@ -61,7 +65,7 @@ yellow=""
 reset=""
 
 usage() {
-  printf 'Usage: %s [rebuild|shell|fetch|proxy-log|claude]\n' "${0}"
+  printf 'Usage: %s [rebuild|shell|fetch|proxy-log|claude|github-token]\n' "${0}"
   printf '  PROXY_LOG_SINCE=<time>  limit proxy-log (e.g. -1h, today)\n'
 }
 
@@ -72,7 +76,7 @@ parse_arguments() {
   fi
 
   case "${mode}" in
-  dev | rebuild | shell | fetch | proxy-log)
+  dev | rebuild | shell | fetch | proxy-log | github-token)
     ;;
   claude)
     agent_tool="claude"
@@ -194,6 +198,21 @@ verify_host_environment() {
       "${claude_token_file}" \
       "Claude Code token (create with: claude setup-token)" ||
       status=1
+  fi
+
+  if [[ "${agent_forge}" == "github" ]]; then
+    check_file \
+      "${github_app_config}" \
+      "GitHub App configuration (${github_app_config})" ||
+      status=1
+
+    if [[ -f "${github_app_config}" ]]; then
+      local github_app_key=""
+      # shellcheck source=/dev/null
+      source "${github_app_config}"
+      check_file "${github_app_key}" "GitHub App private key" ||
+        status=1
+    fi
   fi
 
   if ((status != 0)); then
@@ -371,14 +390,29 @@ verify_agent_environment() {
       status=1
     check_agent_path_writable "${agent_workspace}" "workspace is writable" ||
       status=1
-    check_agent_path_readonly "${agent_upstream}" "upstream repository is read-only" ||
-      status=1
     check_agent_path_absent "/workspaces/${repo_name}" "developer working tree is not mounted" ||
       status=1
-    check_agent_mountpoint "${agent_delivery}" "delivery repository is isolated" ||
-      status=1
-    check_agent_path_writable "${agent_delivery}" "delivery repository is writable" ||
-      status=1
+
+    if [[ "${agent_forge}" == "github" ]]; then
+      check_agent "GitHub token is available" \
+        test -r /run/agent-github/token ||
+        status=1
+      check_agent_path_readonly /run/agent-github "GitHub token is read-only" ||
+        status=1
+      check_agent_path_absent /upstream "host repository is not mounted" ||
+        status=1
+      # shellcheck disable=SC2016
+      check_agent "gh reads the token through its wrapper" \
+        sh -c '[ "$(command -v gh)" = /usr/local/bin/gh ]' ||
+        status=1
+    else
+      check_agent_path_readonly "${agent_upstream}" "upstream repository is read-only" ||
+        status=1
+      check_agent_mountpoint "${agent_delivery}" "delivery repository is isolated" ||
+        status=1
+      check_agent_path_writable "${agent_delivery}" "delivery repository is writable" ||
+        status=1
+    fi
   else
     for path in \
       "${baseline_protected_paths[@]}" \
@@ -585,6 +619,11 @@ fetch_agent_branches() {
     echo "fetch requires agent_workspace_mode=clone in sandbox.conf" >&2
     exit 1
   fi
+  if [[ "${agent_forge}" == "github" ]]; then
+    echo "This workspace delivers through GitHub. Review pull requests there," >&2
+    echo "or run git fetch origin to fetch agent branches." >&2
+    exit 1
+  fi
 
   local bundle
   bundle="$(mktemp --suffix=.bundle)"
@@ -639,11 +678,27 @@ prepare_agent_clone() {
     upstream="$2"
     delivery="$3"
     repo="$4"
+    forge="$5"
+    forge_repository="$6"
     cd "${workspace}"
+
+    if [ "${forge}" = "github" ]; then
+      origin_url="https://github.com/${forge_repository}.git"
+    else
+      origin_url="file://${upstream}"
+    fi
 
     if [ ! -d .git ]; then
       git init --quiet
-      git remote add origin "file://${upstream}"
+      git remote add origin "${origin_url}"
+    else
+      git remote set-url origin "${origin_url}"
+    fi
+
+    if [ "${forge}" = "github" ]; then
+      # Read the token issued on the host each time Git needs it. See ADR-0013.
+      git config credential.https://github.com.helper \
+        "!f() { test \"\$1\" = get || exit 0; echo username=x-access-token; echo \"password=\$(cat /run/agent-github/token)\"; }; f"
     fi
 
     git fetch --quiet origin
@@ -666,19 +721,95 @@ prepare_agent_clone() {
       fi
     done
 
-    if [ ! -f "${delivery}/HEAD" ]; then
-      git init --bare --quiet "${delivery}"
+    if [ "${forge}" = "github" ]; then
+      git config remote.pushDefault origin
+    else
+      if [ ! -f "${delivery}/HEAD" ]; then
+        git init --bare --quiet "${delivery}"
+      fi
+      if ! git remote get-url delivery >/dev/null 2>&1; then
+        git remote add delivery "file://${delivery}"
+      fi
+      git config remote.pushDefault delivery
     fi
 
-    if ! git remote get-url delivery >/dev/null 2>&1; then
-      git remote add delivery "file://${delivery}"
-    fi
-
-    git config remote.pushDefault delivery
     git config push.default current
     git config user.name "Coding agent"
     git config user.email "coding-agent@${repo}.invalid"
-  ' _ "${agent_workspace}" "${agent_upstream}" "${agent_delivery}" "${repo_name}"
+  ' _ "${agent_workspace}" "${agent_upstream}" "${agent_delivery}" \
+    "${repo_name}" "${agent_forge}" "${agent_forge_repository}"
+}
+
+issue_github_token() {
+  if [[ "${agent_forge}" != "github" ]]; then
+    echo "issue_github_token requires agent_forge=github in sandbox.conf" >&2
+    return 1
+  fi
+  if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+    echo "issue_github_token requires XDG_RUNTIME_DIR" >&2
+    return 1
+  fi
+
+  local -a openssl_command
+  if command -v openssl >/dev/null 2>&1; then
+    openssl_command=(openssl)
+  elif command -v toolbox >/dev/null 2>&1; then
+    openssl_command=(toolbox run openssl)
+  else
+    echo "issue_github_token needs openssl on the host or in a toolbox" >&2
+    return 1
+  fi
+
+  local github_app_id="" github_app_key=""
+  # shellcheck source=/dev/null
+  source "${github_app_config}"
+
+  b64url() {
+    "${openssl_command[@]}" base64 -A | tr '+/' '-_' | tr -d '='
+  }
+
+  local now header payload signature jwt
+  now="$(date +%s)"
+  header="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)"
+  payload="$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' \
+    "$((now - 60))" "$((now + 540))" "${github_app_id}" | b64url)"
+  signature="$(printf '%s.%s' "${header}" "${payload}" |
+    "${openssl_command[@]}" dgst -sha256 -sign "${github_app_key}" -binary | b64url)"
+  jwt="${header}.${payload}.${signature}"
+
+  local -a api=(
+    curl --fail --silent --show-error
+    --header "Accept: application/vnd.github+json"
+    --header "X-GitHub-Api-Version: 2022-11-28"
+  )
+
+  local installation_id
+  installation_id="$("${api[@]}" \
+    --header "Authorization: Bearer ${jwt}" \
+    "https://api.github.com/repos/${agent_forge_repository}/installation" |
+    grep -o '"id": *[0-9]*' | head -n 1 | grep -o '[0-9]*$')"
+
+  local repository="${agent_forge_repository#*/}"
+  local response
+  response="$("${api[@]}" \
+    --request POST \
+    --header "Authorization: Bearer ${jwt}" \
+    --data "{\"repositories\":[\"${repository}\"],\"permissions\":{\"contents\":\"write\",\"pull_requests\":\"write\",\"issues\":\"read\",\"actions\":\"read\",\"checks\":\"read\",\"metadata\":\"read\"}}" \
+    "https://api.github.com/app/installations/${installation_id}/access_tokens")"
+
+  (
+    umask 077
+    mkdir -p "${github_token_dir}"
+  )
+  (
+    umask 077
+    printf '%s' "${response}" |
+      grep -o '"token": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' \
+      >"${github_token_dir}/token.new"
+  )
+  mv "${github_token_dir}/token.new" "${github_token_dir}/token"
+
+  printf '%s' "${response}" | grep -o '"expires_at": *"[^"]*"'
 }
 
 enter_devcontainer() {
@@ -696,6 +827,13 @@ enter_devcontainer() {
   fi
 
   ensure_mount_points
+
+  if [[ "${agent_forge}" == "github" ]] &&
+    ! issue_github_token >/dev/null; then
+    open_troubleshooting_shell \
+      "Failed to issue a GitHub token"
+  fi
+
   ensure_agent_network
   start_agent_proxy
 
@@ -823,6 +961,11 @@ fi
 
 if [[ "${mode}" == "proxy-log" ]]; then
   show_proxy_log
+  exit 0
+fi
+
+if [[ "${mode}" == "github-token" ]]; then
+  issue_github_token
   exit 0
 fi
 
